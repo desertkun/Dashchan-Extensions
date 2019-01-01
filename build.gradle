@@ -1,10 +1,11 @@
 buildscript {
 	repositories {
 		jcenter()
+		google()
 	}
 
 	dependencies {
-		classpath 'com.android.tools.build:gradle:2.3.1'
+		classpath 'com.android.tools.build:gradle:3.1.4'
 		classpath 'me.tatarka:gradle-retrolambda:3.6.1'
 	}
 }
@@ -12,6 +13,7 @@ buildscript {
 allprojects {
 	repositories {
 		jcenter()
+		google()
 	}
 }
 
@@ -24,8 +26,8 @@ dependencies {
 }
 
 android {
-	compileSdkVersion 25
-	buildToolsVersion '25.0.2'
+	compileSdkVersion 26
+	buildToolsVersion '27.0.3'
 
 	sourceSets.main {
 		manifest.srcFile 'AndroidManifest.xml'
