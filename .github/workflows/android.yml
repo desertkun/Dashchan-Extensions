@@ -45,6 +45,8 @@ jobs:
             name: Warosu
           - module: archb4k
             name: ArchB4K
+          - module: archiveofsins
+            name: ArchiveOfSins
 
     steps:
     - uses: actions/checkout@v3
