@@ -47,6 +47,10 @@ jobs:
             name: ArchB4K
           - module: archiveforplebs
             name: ArchiveForPlebs
+          - module: archiveofsins
+            name: ArchiveOfSins
+          - module: palanqwin
+            name: PalanqWin
 
     steps:
     - uses: actions/checkout@v3
