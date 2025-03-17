@@ -45,6 +45,8 @@ jobs:
             name: Warosu
           - module: archb4k
             name: ArchB4K
+          - module: archiveforplebs
+            name: ArchiveForPlebs
           - module: archiveofsins
             name: ArchiveOfSins
           - module: palanqwin
