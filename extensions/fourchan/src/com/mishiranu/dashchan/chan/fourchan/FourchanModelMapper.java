@@ -201,6 +201,20 @@ public class FourchanModelMapper {
 					}
 					break;
 				}
+                case "tail_size": {
+                      /*
+                    	This check is probably redundant because i've never seen tail_size
+                    	less than 50 but i keep it just in case.
+                     */
+                    if (reader.nextInt() > 0) {
+						/*
+							Only the first post has tail_size, and the number of the first
+                    	    post is the number of the thread.
+						 */
+                        ThreadsWithTailCache.INSTANCE.add(post.getPostNumber());
+                    }
+                    break;
+                }
 				default: {
 					reader.skip();
 					break;
