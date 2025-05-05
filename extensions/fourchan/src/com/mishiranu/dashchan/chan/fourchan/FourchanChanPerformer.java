@@ -55,6 +55,12 @@ public class FourchanChanPerformer extends ChanPerformer {
 
 	private final HashMap<String, Long> lastRulesUpdate = new HashMap<>();
 
+    private final HttpRequest.RedirectHandler unsafeRedirectHandler =
+            new HttpRequestUnsafeRedirectHandler();
+
+    private final HttpRequest.RedirectHandler strictUnsafeRedirectHandler =
+            new HttpRequestUnsafeRedirectHandler(HttpRequest.RedirectHandler.STRICT);
+
 	private void updateBoardRules(HttpRequest.Preset preset,
 			String boardName, List<Posts> threads) throws HttpException {
 		Long update;
@@ -76,8 +82,10 @@ public class FourchanChanPerformer extends ChanPerformer {
 			FourchanChanLocator locator = FourchanChanLocator.get(this);
 			Uri uri = locator.createSysUri(boardName, "imgboard.php").buildUpon()
 					.appendQueryParameter("mode", "report").appendQueryParameter("no", postNumber).build();
-			response = new HttpRequest(uri, preset).setSuccessOnly(false)
-					.perform();
+			response = new HttpRequest(uri, preset)
+                    .setSuccessOnly(false)
+					.setRedirectHandler(unsafeRedirectHandler)
+                    .perform();
 		}
 		List<ReportReason> reportReasons = Collections.emptyList();
 		if (response != null) {
@@ -105,7 +113,10 @@ public class FourchanChanPerformer extends ChanPerformer {
 		FourchanChanConfiguration configuration = FourchanChanConfiguration.get(this);
 		Uri uri = locator.createApiUri(data.boardName, (data.isCatalog() ? "catalog"
 				: Integer.toString(data.pageNumber + 1)) + ".json");
-		HttpResponse response = new HttpRequest(uri, data).setValidator(data.validator).perform();
+		HttpResponse response = new HttpRequest(uri, data)
+                .setValidator(data.validator)
+                .setRedirectHandler(unsafeRedirectHandler)
+                .perform();
 		HttpValidator validator = response.getValidator();
 		ArrayList<Posts> threads = new ArrayList<>();
 		boolean handleMathTags = configuration.isMathTagsHandlingEnabled();
@@ -174,8 +185,11 @@ public class FourchanChanPerformer extends ChanPerformer {
 		int uniquePosters = 0;
 		if (tail) {
 			Uri uri = locator.createApiUri(data.boardName, "thread", data.threadNumber + "-tail.json");
-			HttpResponse response = new HttpRequest(uri, data).setValidator(data.validator)
-					.setSuccessOnly(false).perform();
+			HttpResponse response = new HttpRequest(uri, data)
+                    .setValidator(data.validator)
+					.setSuccessOnly(false)
+                    .setRedirectHandler(unsafeRedirectHandler)
+                    .perform();
 			if (response.getResponseCode() == HttpURLConnection.HTTP_OK) {
 				TRY: try (InputStream input = response.open();
 						JsonSerial.Reader reader = JsonSerial.reader(input)) {
@@ -228,7 +242,10 @@ public class FourchanChanPerformer extends ChanPerformer {
 			}
 		}
 		Uri uri = locator.createApiUri(data.boardName, "thread", data.threadNumber + ".json");
-		HttpResponse response = new HttpRequest(uri, data).setValidator(data.validator).perform();
+		HttpResponse response = new HttpRequest(uri, data)
+                .setValidator(data.validator)
+                .setRedirectHandler(unsafeRedirectHandler)
+                .perform();
 		try (InputStream input = response.open();
 				JsonSerial.Reader reader = JsonSerial.reader(input)) {
 			reader.startObject();
@@ -270,7 +287,9 @@ public class FourchanChanPerformer extends ChanPerformer {
 		boolean handleMathTags = configuration.isMathTagsHandlingEnabled();
 		Uri uri = locator.createSearchApiUri("b", data.boardName, "q", data.searchQuery,
 				"o", Integer.toString(10 * data.pageNumber));
-		HttpResponse response = new HttpRequest(uri, data).perform();
+		HttpResponse response = new HttpRequest(uri, data)
+                .setRedirectHandler(unsafeRedirectHandler)
+                .perform();
 		Locale locale = Locale.US;
 		String lowerSearchQuery = data.searchQuery.toLowerCase(locale);
 		try (InputStream input = response.open();
@@ -333,7 +352,9 @@ public class FourchanChanPerformer extends ChanPerformer {
 	public ReadBoardsResult onReadBoards(ReadBoardsData data) throws HttpException, InvalidResponseException {
 		FourchanChanLocator locator = FourchanChanLocator.get(this);
 		Uri uri = locator.buildPath();
-		HttpResponse response = new HttpRequest(uri, data).perform();
+		HttpResponse response = new HttpRequest(uri, data)
+                .setRedirectHandler(unsafeRedirectHandler)
+                .perform();
 		Map<String, List<String>> categoryMap;
 		try (InputStream input = response.open()) {
 			categoryMap = new FourchanBoardsParser(this).parse(input);
@@ -356,7 +377,9 @@ public class FourchanChanPerformer extends ChanPerformer {
 			}
 		}
 		uri = locator.createApiUri("boards.json");
-		response = new HttpRequest(uri, data).perform();
+		response = new HttpRequest(uri, data)
+                .setRedirectHandler(unsafeRedirectHandler)
+                .perform();
 		try (InputStream input = response.open();
 				JsonSerial.Reader reader = JsonSerial.reader(input)) {
 			reader.startObject();
@@ -408,7 +431,10 @@ public class FourchanChanPerformer extends ChanPerformer {
 		if (data.type == ReadThreadSummariesData.TYPE_ARCHIVED_THREADS) {
 			FourchanChanLocator locator = FourchanChanLocator.get(this);
 			Uri uri = locator.createBoardUri(data.boardName, 0).buildUpon().appendPath("archive").build();
-			String responseText = new HttpRequest(uri, data).perform().readString();
+			String responseText = new HttpRequest(uri, data)
+                    .setRedirectHandler(unsafeRedirectHandler)
+                    .perform()
+                    .readString();
 			ArrayList<ThreadSummary> threadSummaries = new ArrayList<>();
 			Matcher matcher = PATTERN_ARCHIVED_THREAD.matcher(responseText);
 			while (matcher.find()) {
@@ -432,11 +458,19 @@ public class FourchanChanPerformer extends ChanPerformer {
 					"fcolor=000000&mode=0&out=1&remhost=quicklatex.com&preamble=\\usepackage{amsmath}\n" +
 					"\\usepackage{amsfonts}\n\\usepackage{amssymb}");
 			entity.setContentType("application/x-www-form-urlencoded");
-			String responseText = new HttpRequest(uri, data).setPostMethod(entity).perform().readString();
+			String responseText = new HttpRequest(uri, data)
+					.setPostMethod(entity)
+                    .setRedirectHandler(unsafeRedirectHandler)
+                    .perform()
+                    .readString();
 			String[] splitted = responseText.split("\r?\n| ");
 			if (splitted.length >= 2 && "0".equals(splitted[0])) {
 				uri = Uri.parse(splitted[1]);
-				return new ReadContentResult(new HttpRequest(uri, data).perform());
+				return new ReadContentResult(
+                        new HttpRequest(uri, data)
+                        .setRedirectHandler(unsafeRedirectHandler)
+                        .perform()
+                );
 			}
 			throw HttpException.createNotFoundException();
 		}
@@ -483,9 +517,10 @@ public class FourchanChanPerformer extends ChanPerformer {
 		FourchanChanLocator locator = FourchanChanLocator.get(this);
 		Uri uri = locator.createSysUri(null, "auth");
 		UrlEncodedEntity entity = new UrlEncodedEntity("act", "do_login", "id", token, "pin", pin, "long_login", "yes");
-		HttpResponse response = new HttpRequest(uri, preset).setPostMethod(entity)
-				.setRedirectHandler(HttpRequest.RedirectHandler.STRICT)
-				.perform();
+		HttpResponse response = new HttpRequest(uri, preset)
+                .setPostMethod(entity)
+				.setRedirectHandler(strictUnsafeRedirectHandler)
+                .perform();
 		String responseText = response.readString();
 		Matcher matcher = PATTERN_AUTH_MESSAGE.matcher(responseText);
 		if (matcher.find()) {
@@ -573,10 +608,13 @@ public class FourchanChanPerformer extends ChanPerformer {
 			String fourchanPassCookie = getFourchanPassCookie(configuration, data.boardName);
 			while (true) {
 				try {
-					JSONObject jsonObject = new JSONObject(new HttpRequest(uri, data)
+					JSONObject jsonObject = new JSONObject(
+                            new HttpRequest(uri, data)
 							.addCookie(COOKIE_FOURCHAN_PASS, fourchanPassCookie)
-							.perform()
-							.readString());
+							.setRedirectHandler(unsafeRedirectHandler)
+                            .perform()
+							.readString()
+                    );
 					String newCaptchaTicket = jsonObject.optString("ticket");
 					if (!newCaptchaTicket.isEmpty()) {
 						saveCaptchaTicket(newCaptchaTicket);
@@ -702,7 +740,10 @@ public class FourchanChanPerformer extends ChanPerformer {
 	private ApiException.BanExtra readBanExtra(HttpRequest.Preset preset, String boardName) throws HttpException {
 		FourchanChanLocator locator = FourchanChanLocator.get(this);
 		Uri uri = locator.buildPath("banned");
-		String responseText = new HttpRequest(uri, preset).perform().readString();
+		String responseText = new HttpRequest(uri, preset)
+				.setRedirectHandler(unsafeRedirectHandler)
+				.perform()
+				.readString();
 		while (responseText.contains(RECAPTCHA_API_KEY)) {
 			CaptchaData captchaData = requireUserCaptcha(REQUIREMENT_BANNED, boardName, null, false);
 			if (captchaData == null) {
@@ -710,7 +751,11 @@ public class FourchanChanPerformer extends ChanPerformer {
 			}
 			MultipartEntity entity = new MultipartEntity();
 			entity.add("g-recaptcha-response", captchaData.get(CaptchaData.INPUT));
-			responseText = new HttpRequest(uri, preset).setPostMethod(entity).perform().readString();
+			responseText = new HttpRequest(uri, preset)
+                    .setPostMethod(entity)
+                    .setRedirectHandler(unsafeRedirectHandler)
+                    .perform()
+                    .readString();
 		}
 		HashMap<String, String> fields = new HashMap<>();
 		for (String name : Arrays.asList("reason", "startDate", "endDate")) {
@@ -809,7 +854,8 @@ public class FourchanChanPerformer extends ChanPerformer {
 				.addHeader("Sec-Fetch-User", "?1");
 
 		HttpResponse response = request.setPostMethod(entity)
-				.setRedirectHandler(HttpRequest.RedirectHandler.STRICT).perform();
+                .setRedirectHandler(strictUnsafeRedirectHandler)
+                .perform();
 		handleFourchanPass(response, data.boardName);
 		String responseText = response.readString();
 
@@ -880,8 +926,8 @@ public class FourchanChanPerformer extends ChanPerformer {
 			entity.add("onlyimgdel", "on");
 		}
 		String responseText = new HttpRequest(uri, data).setPostMethod(entity)
-				.setRedirectHandler(HttpRequest.RedirectHandler.STRICT)
-				.perform()
+				.setRedirectHandler(strictUnsafeRedirectHandler)
+                .perform()
 				.readString();
 		Matcher matcher = PATTERN_POST_ERROR.matcher(responseText);
 		if (matcher.find()) {
@@ -944,8 +990,8 @@ public class FourchanChanPerformer extends ChanPerformer {
 			String fourchanPassCookie = getFourchanPassCookie(configuration, data.boardName);
 			HttpResponse response = new HttpRequest(uri, data).setPostMethod(entity)
 					.addCookie(COOKIE_FOURCHAN_PASS, fourchanPassCookie)
-					.setRedirectHandler(HttpRequest.RedirectHandler.STRICT)
-					.perform();
+					.setRedirectHandler(strictUnsafeRedirectHandler)
+                    .perform();
 			handleFourchanPass(response, data.boardName);
 			String responseText = response.readString();
 			Matcher matcher = PATTERN_REPORT_MESSAGE.matcher(responseText);
