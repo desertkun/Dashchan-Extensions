@@ -168,7 +168,8 @@ public class FourchanChanPerformer extends ChanPerformer {
 		FourchanChanLocator locator = FourchanChanLocator.get(this);
 		FourchanChanConfiguration configuration = FourchanChanConfiguration.get(this);
 		boolean handleMathTags = configuration.isMathTagsHandlingEnabled();
-		boolean tail = data.partialThreadLoading && data.lastPostNumber != null;
+		boolean tail = ThreadsWithTailCache.INSTANCE.contains(data.threadNumber) &&
+				data.partialThreadLoading && data.lastPostNumber != null;
 		ArrayList<Post> posts = new ArrayList<>();
 		int uniquePosters = 0;
 		if (tail) {
