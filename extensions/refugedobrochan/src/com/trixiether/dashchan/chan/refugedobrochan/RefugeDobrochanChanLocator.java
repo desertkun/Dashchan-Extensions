@@ -20,4 +20,9 @@ public class RefugeDobrochanChanLocator extends VichanChanLocator {
         return threadNumber != null ? super.buildPath(DEFAULT_SEGMENT_PRESET, boardName, "res", threadNumber + ".html")
                 : super.buildPath(DEFAULT_SEGMENT_PRESET, boardName);
     }
+
+    @Override
+    public Uri createPostUri(String boardName, String threadNumber, String postNumber) {
+        return super.buildPath(DEFAULT_SEGMENT_PRESET, boardName, "res", threadNumber + ".html#q" + postNumber);
+    }
 }
