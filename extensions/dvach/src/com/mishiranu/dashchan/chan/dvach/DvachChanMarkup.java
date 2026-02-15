@@ -23,6 +23,7 @@ public class DvachChanMarkup extends ChanMarkup {
 		addTag("span", "s", TAG_STRIKE);
 		addTag("span", "u", TAG_UNDERLINE);
 		addTag("span", "o", TAG_OVERLINE);
+		addTag("div", "neuroslop", TAG_AI);
 		addColorable("span");
 		addColorable("font");
 	}

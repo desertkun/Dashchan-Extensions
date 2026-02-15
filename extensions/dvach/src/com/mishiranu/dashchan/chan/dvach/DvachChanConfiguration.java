@@ -49,6 +49,7 @@ public class DvachChanConfiguration extends ChanConfiguration {
 		request(OPTION_READ_POSTS_COUNT);
 		request(OPTION_READ_USER_BOARDS);
 		request(OPTION_ALLOW_CAPTCHA_PASS);
+		request(OPTION_AI_POSTING);
 		setDefaultName("Аноним");
 		setBumpLimit(500);
 		for (String captchaType : CAPTCHA_TYPES.keySet()) {
