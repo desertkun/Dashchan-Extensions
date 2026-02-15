@@ -308,6 +308,9 @@ public class DvachModelMapper {
 					if ("pr".equals(boardName) && comment.contains("[code")) {
 						comment = PATTERN_CODE.matcher(comment).replaceAll("<fakecode>$1</fakecode>");
 					}
+					if (comment.contains("<div class=\"neuroslop\">")) {
+						post.setAIGenerated(true);
+					}
 					break;
 				}
 				case "name": {
