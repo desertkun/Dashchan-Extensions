@@ -5,3 +5,7 @@ chan {
 	apiVersion 1
 	hosts 'ech.bz'
 }
+
+dependencies {
+	implementation 'org.web3j:abi:4.8.9'
+}

@@ -1,15 +1,14 @@
 package com.mishiranu.dashchan.chan.e444.captcha;
 
 import android.graphics.Bitmap;
-import android.net.Uri;
 import chan.content.ChanPerformer;
 import chan.content.InvalidResponseException;
 import chan.http.HttpException;
-import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import chan.http.UrlEncodedEntity;
 import chan.util.CommonUtils;
 import com.mishiranu.dashchan.chan.e444.E444ChanConfiguration;
+import com.mishiranu.dashchan.chan.e444.E444IpRequestPerformer;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
 import com.mishiranu.dashchan.chan.e444.E444ChanPerformer;
 import org.json.JSONException;
@@ -54,10 +53,11 @@ public final class E444CaptchaReader {
 	private static boolean checkSlideCaptcha(E444ChanPerformer performer, ChanPerformer.ReadCaptchaData data,
 			String session, String key, String value, int x, int y) throws HttpException, InvalidResponseException {
 		E444ChanLocator locator = E444ChanLocator.get(performer);
-		Uri uri = locator.buildQuery("api/captcha/slide/check", "v", value);
 		UrlEncodedEntity entity = new UrlEncodedEntity("point", x + "," + y, "key", key);
-		HttpResponse response = new HttpRequest(uri, data).setPostMethod(entity)
-				.addCookie(E444CaptchaSession.COOKIE_SESSION, session).perform();
+		HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+				(currentLocator, host) -> currentLocator.buildQueryWithSchemeHost(true, host,
+						"api/captcha/slide/check", "v", value),
+				request -> request.setPostMethod(entity).addCookie(E444CaptchaSession.COOKIE_SESSION, session));
 		E444CaptchaSession.updateAndStore(E444ChanConfiguration.get(performer), response, session);
 		try {
 			JSONObject jsonObject = new JSONObject(response.readString());
@@ -87,10 +87,12 @@ public final class E444CaptchaReader {
 			E444ChanConfiguration configuration = E444ChanConfiguration.get(performer);
 			String session = E444CaptchaSession.get(configuration);
 			String value = Long.toString(System.currentTimeMillis());
-			Uri uri = locator.buildQuery("api/captcha/slide/id", "v", value);
-			HttpResponse response = new HttpRequest(uri, data)
-					.addCookie(E444CaptchaSession.COOKIE_SESSION, session).perform();
-			session = E444CaptchaSession.updateAndStore(configuration, response, session);
+			String requestSession = session;
+			HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+					(currentLocator, host) -> currentLocator.buildQueryWithSchemeHost(true, host,
+							"api/captcha/slide/id", "v", value),
+					request -> request.addCookie(E444CaptchaSession.COOKIE_SESSION, requestSession));
+			session = E444CaptchaSession.updateAndStore(configuration, response, requestSession);
 			String key;
 			Bitmap image;
 			Bitmap tile;

@@ -40,9 +40,11 @@ public class E444ChanPerformer extends ChanPerformer {
 	@Override
 	public ReadThreadsResult onReadThreads(ReadThreadsData data) throws HttpException, InvalidResponseException {
 		E444ChanLocator locator = E444ChanLocator.get(this);
-		Uri uri = locator.buildPath(data.boardName, (data.isCatalog() ? "catalog" : data.pageNumber == 0
-				? "index" : Integer.toString(data.pageNumber)) + ".json");
-		HttpResponse response = new HttpRequest(uri, data).setValidator(data.validator).perform();
+		HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+				(currentLocator, host) -> currentLocator.buildPathWithSchemeHost(true, host, data.boardName,
+						(data.isCatalog() ? "catalog" : data.pageNumber == 0
+								? "index" : Integer.toString(data.pageNumber)) + ".json"),
+				request -> request.setValidator(data.validator));
 		E444ChanConfiguration configuration = E444ChanConfiguration.get(this);
 		E444ModelMapper.BoardConfiguration boardConfiguration = new E444ModelMapper.BoardConfiguration();
 		ArrayList<Posts> threads = new ArrayList<>();
@@ -86,8 +88,10 @@ public class E444ChanPerformer extends ChanPerformer {
 	public ReadPostsResult onReadPosts(ReadPostsData data) throws HttpException, InvalidResponseException {
 		E444ChanLocator locator = E444ChanLocator.get(this);
 		E444ChanConfiguration configuration = E444ChanConfiguration.get(this);
-		Uri uri = locator.buildPath(data.boardName, "res", data.threadNumber + ".json");
-		HttpResponse response = new HttpRequest(uri, data).setValidator(data.validator).perform();
+		HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+				(currentLocator, host) -> currentLocator.buildPathWithSchemeHost(true, host,
+						data.boardName, "res", data.threadNumber + ".json"),
+				request -> request.setValidator(data.validator));
 		try (InputStream input = response.open();
 				JsonSerial.Reader reader = JsonSerial.reader(input)) {
 			E444ModelMapper.BoardConfiguration boardConfiguration =
@@ -143,8 +147,9 @@ public class E444ChanPerformer extends ChanPerformer {
 	public ReadBoardsResult onReadBoards(ReadBoardsData data) throws HttpException, InvalidResponseException {
 		E444ChanLocator locator = E444ChanLocator.get(this);
 		E444ChanConfiguration configuration = E444ChanConfiguration.get(this);
-		Uri uri = locator.buildPath("index.json");
-		HttpResponse response = new HttpRequest(uri, data).perform();
+		HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+				(currentLocator, host) -> currentLocator.buildPathWithSchemeHost(true, host, "index.json"),
+				null);
 		try (InputStream input = response.open();
 				JsonSerial.Reader reader = JsonSerial.reader(input)) {
 			HashMap<String, ArrayList<Board>> boardsMap = new HashMap<>();
@@ -230,6 +235,21 @@ public class E444ChanPerformer extends ChanPerformer {
 				images -> requireUserImageSingleChoice(-1, images, description, null));
 	}
 
+	@Override
+	public ReadContentResult onReadContent(ReadContentData data) throws HttpException, InvalidResponseException {
+		Uri uri = data.uri;
+		String host = uri.getHost();
+		if (!StringUtils.isEmpty(host)
+				&& (E444ChanLocator.CHAN_HOST.equals(host) || E444Web3HostResolver.isResolvedHost(host))) {
+			E444ChanLocator locator = E444ChanLocator.get(this);
+			HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+					(currentLocator, resolvedHost) -> E444IpRequestPerformer.rewriteUriHost(uri, resolvedHost),
+					null);
+			return new ReadContentResult(response);
+		}
+		return super.onReadContent(data);
+	}
+
 	private static final Pattern PATTERN_BAN = Pattern.compile("([^ ]*?): (.*?)(?:\\.|$)");
 
 	private static final SimpleDateFormat DATE_FORMAT_BAN;
@@ -271,11 +291,13 @@ public class E444ChanPerformer extends ChanPerformer {
 		}
 
 		E444ChanLocator locator = E444ChanLocator.get(this);
-		Uri uri = locator.buildPath("user/posting");
-		HttpResponse response = new HttpRequest(uri, data).setPostMethod(entity)
-				.addCookie(E444CaptchaSession.COOKIE_SESSION, session)
-				.setRedirectHandler(HttpRequest.RedirectHandler.STRICT).perform();
-		E444CaptchaSession.updateAndStore(configuration, response, session);
+		String requestSession = session;
+		HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+				(currentLocator, host) -> currentLocator.buildPathWithSchemeHost(true, host, "user/posting"),
+				request -> request.setPostMethod(entity)
+						.addCookie(E444CaptchaSession.COOKIE_SESSION, requestSession)
+						.setRedirectHandler(HttpRequest.RedirectHandler.STRICT));
+		E444CaptchaSession.updateAndStore(configuration, response, requestSession);
 		JSONObject jsonObject;
 		try {
 			jsonObject = new JSONObject(response.readString());
@@ -385,12 +407,13 @@ public class E444ChanPerformer extends ChanPerformer {
 		E444ChanLocator locator = E444ChanLocator.get(this);
 		E444ChanConfiguration configuration = E444ChanConfiguration.get(this);
 		String session = E444CaptchaSession.get(configuration);
-		Uri uri = locator.buildPath("api", "posting");
 		MultipartEntity entity = new MultipartEntity("task", "delete", "board", data.boardName,
 				"thread", data.threadNumber, "postnum", data.postNumbers.get(0));
-		HttpResponse response = new HttpRequest(uri, data).setPostMethod(entity)
-				.addCookie(E444CaptchaSession.COOKIE_SESSION, session)
-				.setRedirectHandler(HttpRequest.RedirectHandler.STRICT).perform();
+		HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+				(currentLocator, host) -> currentLocator.buildPathWithSchemeHost(true, host, "api", "posting"),
+				request -> request.setPostMethod(entity)
+						.addCookie(E444CaptchaSession.COOKIE_SESSION, session)
+						.setRedirectHandler(HttpRequest.RedirectHandler.STRICT));
 		E444CaptchaSession.updateAndStore(configuration, response, session);
 		JSONObject jsonObject;
 		try {
@@ -420,7 +443,6 @@ public class E444ChanPerformer extends ChanPerformer {
 	public SendReportPostsResult onSendReportPosts(SendReportPostsData data) throws HttpException, ApiException,
 			InvalidResponseException {
 		E444ChanLocator locator = E444ChanLocator.get(this);
-		Uri uri = locator.buildPath("api", "posting");
 		StringBuilder postsBuilder = new StringBuilder();
 		for (String postNumber : data.postNumbers) {
 			postsBuilder.append(postNumber).append(", ");
@@ -429,8 +451,10 @@ public class E444ChanPerformer extends ChanPerformer {
 				"thread", data.threadNumber, "posts", postsBuilder.toString(), "comment", data.comment);
 		JSONObject jsonObject;
 		try {
-			jsonObject = new JSONObject(new HttpRequest(uri, data).setPostMethod(entity)
-					.setRedirectHandler(HttpRequest.RedirectHandler.STRICT).perform().readString());
+			HttpResponse response = E444IpRequestPerformer.perform(locator, data,
+					(currentLocator, host) -> currentLocator.buildPathWithSchemeHost(true, host, "api", "posting"),
+					request -> request.setPostMethod(entity).setRedirectHandler(HttpRequest.RedirectHandler.STRICT));
+			jsonObject = new JSONObject(response.readString());
 			int error = Math.abs(jsonObject.optInt("Error", Integer.MAX_VALUE));
 			String reason = jsonObject.optString("Reason");
 			if (StringUtils.isEmpty(reason) || "Reported".equals(reason)) {

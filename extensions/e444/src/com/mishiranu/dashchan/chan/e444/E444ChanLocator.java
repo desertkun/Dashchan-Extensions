@@ -1,35 +1,41 @@
 package com.mishiranu.dashchan.chan.e444;
 
 import android.net.Uri;
-import android.util.Log;
 
 import chan.content.ChanLocator;
 import java.util.List;
 import java.util.regex.Pattern;
 
 public class E444ChanLocator extends ChanLocator {
+	public static final String CHAN_HOST = "ech.bz";
+
 	private static final Pattern BOARD_PATH = Pattern.compile("/\\w+(?:/(?:(?:index|catalog|\\d+)\\.html)?)?");
 	private static final Pattern THREAD_PATH = Pattern.compile("/\\w+/res/(\\d+)\\.html");
 	private static final Pattern ATTACHMENT_PATH = Pattern.compile("/\\w+/src/(\\d+)/\\d+\\.\\w+");
 
 	public E444ChanLocator() {
-		addChanHost("ech.bz");
+		addChanHost(CHAN_HOST);
 		setHttpsMode(HttpsMode.HTTPS_ONLY);
+	}
+
+	private boolean isKnownHostOrRelative(Uri uri) {
+		String host = uri.getHost();
+		return host == null || CHAN_HOST.equals(host) || E444Web3HostResolver.isResolvedHost(host);
 	}
 
 	@Override
 	public boolean isBoardUri(Uri uri) {
-		return isChanHostOrRelative(uri) && isPathMatches(uri, BOARD_PATH);
+		return isKnownHostOrRelative(uri) && isPathMatches(uri, BOARD_PATH);
 	}
 
 	@Override
 	public boolean isThreadUri(Uri uri) {
-		return isChanHostOrRelative(uri) && isPathMatches(uri, THREAD_PATH);
+		return isKnownHostOrRelative(uri) && isPathMatches(uri, THREAD_PATH);
 	}
 
 	@Override
 	public boolean isAttachmentUri(Uri uri) {
-		return isChanHostOrRelative(uri) && isPathMatches(uri, ATTACHMENT_PATH);
+		return isKnownHostOrRelative(uri) && isPathMatches(uri, ATTACHMENT_PATH);
 	}
 
 	@Override
