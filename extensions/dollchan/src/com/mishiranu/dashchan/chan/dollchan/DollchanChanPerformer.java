@@ -3,6 +3,9 @@ package com.mishiranu.dashchan.chan.dollchan;
 import android.graphics.Bitmap;
 import android.net.Uri;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import chan.content.ApiException;
 import chan.content.ChanLocator;
 import chan.content.InvalidResponseException;
@@ -397,11 +400,43 @@ public class DollchanChanPerformer extends WakabaChanPerformer {
 					"id", postNumber
 				);
 
+				CaptchaData captchaData = requireUserCaptcha(
+					"report",        // requirement tag, any string you like
+					data.boardName,
+					data.threadNumber,
+					false            // first attempt
+				);
+
+				// If captcha was solved, send its input
+				if (captchaData != null && captchaData.get(CaptchaData.INPUT) != null) {
+					entity.add("captcha", captchaData.get(CaptchaData.INPUT));
+				}
+
 				Uri uri = locator.buildPath(data.boardName,
-						"imgboard.php?report&addreport");
-				new HttpRequest(uri, data).
-					addCookie(buildCookiesWithAuthorizationPass()).setPostMethod(entity).
-					perform();
+						"imgboard.php?report&addreport&json=1");
+
+				String response = new HttpRequest(uri, data).
+					addCookie(buildCookies(captchaData)).setPostMethod(entity).
+					perform().readString();
+
+				if (response == null) {
+					throw new ApiException("Empty response");
+				}
+
+				try {
+					JSONObject object = new JSONObject(response);
+					String result = object.optString("result", null);
+					if ("ok".equals(result)) {
+						continue;
+					} else if ("error".equals(result)) {
+						String message = object.optString("message", "Unknown report error");
+						throw new ApiException(message);
+					} else {
+						throw new ApiException("Unexpected report response: " + response);
+					}
+				} catch (JSONException e) {
+					throw new ApiException("Invalid JSON in report response: " + e.getMessage());
+				}
 			}
 
 			return new SendReportPostsResult();

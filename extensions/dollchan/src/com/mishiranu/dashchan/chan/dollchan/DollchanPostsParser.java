@@ -8,17 +8,12 @@ import java.io.InputStreamReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import chan.content.ChanConfiguration;
 import chan.content.ChanLocator;
-import chan.content.WakabaChanConfiguration;
-import chan.content.WakabaChanLocator;
-import chan.content.WakabaPostsParser;
-import chan.content.model.Attachment;
 import chan.content.model.FileAttachment;
 import chan.content.model.Icon;
 import chan.content.model.Post;
@@ -54,8 +49,8 @@ public class DollchanPostsParser {
 	protected boolean headerHandling = false;
 	protected boolean originalNameFromLink;
 
-	private static final Pattern FILE_SIZE = Pattern.compile("([\\d.]+) (\\w+), (\\d+)x(\\d+)(?:, (.+))?");
 	private static final Pattern NUMBER = Pattern.compile("\\d+");
+	private static final Pattern FILE_SIZE = Pattern.compile("\\(([^,]+),\\s*(\\d+)x(\\d+)\\)");
 
 	public DollchanPostsParser(Object linked, String boardName) {
 		originalNameFromLink = true;
@@ -75,6 +70,28 @@ public class DollchanPostsParser {
 			thread.addPostsCount(posts.size());
 			threads.add(thread);
 			posts.clear();
+		}
+	}
+
+	private static long parseSizeToBytes(String sizeStr) {
+		// Examples: "220.93KB", "0.96MB", "273.64KB"
+		sizeStr = sizeStr.trim().toUpperCase(Locale.US);
+		try {
+			int unitIndex = sizeStr.length();
+			while (unitIndex > 0 && Character.isLetter(sizeStr.charAt(unitIndex - 1))) {
+				unitIndex--;
+			}
+			if (unitIndex <= 0) return 0L;
+			double value = Double.parseDouble(sizeStr.substring(0, unitIndex));
+			String unit = sizeStr.substring(unitIndex);
+			long multiplier;
+			if (unit.equals("KB")) multiplier = 1024L;
+			else if (unit.equals("MB")) multiplier = 1024L * 1024L;
+			else if (unit.equals("B")) multiplier = 1L;
+			else multiplier = 1L; // Fallback
+			return (long) (value * multiplier);
+		} catch (NumberFormatException e) {
+			return 0L;
 		}
 	}
 
@@ -111,7 +128,8 @@ public class DollchanPostsParser {
 			holder.attachments = null;
 			return false;
 		})
-		.equals("span", "class", "filesize")
+		// Atomboard: start new attachment for each post-file block
+		.equals("div", "class", "post-file")
 		.open((instance, holder, tagName, attributes) -> {
 			if (holder.post == null) {
 				holder.post = new Post();
@@ -126,60 +144,83 @@ public class DollchanPostsParser {
 			holder.attachment = new FileAttachment();
 			return false;
 		})
-		.name("a")
+		// Full file link
+		.equals("a", "class", "file-fullname")
 		.open((instance, holder, tagName, attributes) -> {
-			if (holder.attachment != null && holder.attachment.getFileUri(holder.locator) == null) {
-				holder.attachment.setFileUri(holder.locator, holder.locator.buildPath(attributes.get("href")));
-
-				String size = attributes.get("data-size");
-				if (size != null)
-				{
-					try
-					{
-						int sz = Integer.parseInt(size);
-						holder.attachment.setSize(sz);
-					}
-					catch (NumberFormatException ignored) {}
-				}
-
-				String width = attributes.get("data-width");
-				if (width != null)
-				{
-					try
-					{
-						int w = Integer.parseInt(width);
+			// In Atomboard markup full image URL inside file-wrap's <a>, not file-fullname
+			return false;
+		})
+		// File-info: size and dimensions, plus name pieces inside
+		.equals("div", "class", "file-info")
+		.content((instance, holder, text) -> {
+			if (holder.attachment != null) {
+				// Strip HTML entities/spans, keep readable text
+				String plain = StringUtils.clearHtml(text);
+				Matcher m = FILE_SIZE.matcher(plain);
+				if (m.find()) {
+					String sizeStr = m.group(1); // e.g. "220.93KB" or "0.96MB"
+					String widthStr = m.group(2);
+					String heightStr = m.group(3);
+					long bytes = parseSizeToBytes(sizeStr);
+					if (bytes > 0) holder.attachment.setSize((int)bytes);
+					try {
+						int w = Integer.parseInt(widthStr);
+						int h = Integer.parseInt(heightStr);
 						holder.attachment.setWidth(w);
-					}
-					catch (NumberFormatException ignored) {}
-				}
-
-				String height = attributes.get("data-height");
-				if (height != null)
-				{
-					try
-					{
-						int h = Integer.parseInt(height);
 						holder.attachment.setHeight(h);
-					}
-					catch (NumberFormatException ignored) {}
+					} catch (NumberFormatException ignored) {}
 				}
-
-				return holder.originalNameFromLink;
+			}
+		})
+		// Original name parts
+		.equals("span", "class", "file-name")
+		.content((instance, holder, text) -> {
+			if (holder.attachment != null) {
+				String base = StringUtils.clearHtml(text).trim();
+				holder.attachment.setOriginalName(base);
+			}
+		})
+		.equals("span", "class", "file-extension")
+		.content((instance, holder, text) -> {
+			if (holder.attachment != null) {
+				String ext = StringUtils.clearHtml(text).trim();
+				String orig = holder.attachment.getOriginalName();
+				if (orig == null) orig = "";
+				holder.attachment.setOriginalName(orig + "." + ext);
+			}
+		})
+		// Dimensions and full image URL from file-wrap
+		.equals("div", "class", "file-wrap")
+		.open((instance, holder, tagName, attributes) -> {
+			if (holder.attachment != null) {
+				String w = attributes.get("data-width");
+				String h = attributes.get("data-height");
+				try {
+					if (w != null) holder.attachment.setWidth(Integer.parseInt(w));
+					if (h != null) holder.attachment.setHeight(Integer.parseInt(h));
+				} catch (NumberFormatException ignored) {}
 			}
 			return false;
 		})
-		.content((instance, holder, text) -> holder.attachment
-				.setOriginalName(StringUtils.clearHtml(text).trim()))
-		.starts("img", "class", "thumb")
+		// Full image link inside file-wrap
+		.equals("a", "target", "_blank")
+		.open((instance, holder, tagName, attributes) -> {
+			if (holder.attachment != null && holder.attachment.getFileUri(holder.locator) == null) {
+				String href = attributes.get("href");
+				if (href != null) {
+					holder.attachment.setFileUri(holder.locator, holder.locator.buildPath(href));
+				}
+			}
+			return false;
+		})
+		// Thumbnail
+		.starts("img", "class", "file-thumb")
 		.open((instance, holder, tagName, attributes) -> {
 			String src = attributes.get("src");
-			if (src != null) {
+			if (src != null && holder.attachment != null) {
 				if (src.contains("/thumb/")) {
 					holder.attachment.setThumbnailUri(holder.locator, holder.locator.buildPath(src));
 				}
-				if (src.contains("extras/icons/spoiler.png")) {
-					holder.attachment.setSpoiler(true);
-				}
 			}
 			if (holder.attachments == null) {
 				holder.attachments = new ArrayList<>();
@@ -189,20 +230,11 @@ public class DollchanPostsParser {
 			holder.attachment = null;
 			return false;
 		})
-		.starts("video", "class", "thumb")
-		.open((instance, holder, tagName, attributes) -> {
-			if (holder.attachments == null) {
-				holder.attachments = new ArrayList<>();
-			}
-			holder.attachments.add(holder.attachment);
-			holder.post.setAttachments(holder.attachments);
-			holder.attachment = null;
-			return false;
-		})
+		// Backward-compat for old markup (if any)
 		.equals("div", "class", "nothumb")
 		.open((instance, holder, tagName, attributes) -> {
-			if (holder.attachment.getSize() > 0 || holder.attachment.getWidth() > 0 ||
-					holder.attachment.getHeight() > 0) {
+			if (holder.attachment != null && (holder.attachment.getSize() > 0 ||
+					holder.attachment.getWidth() > 0 || holder.attachment.getHeight() > 0)) {
 				if (holder.attachments == null) {
 					holder.attachments = new ArrayList<>();
 				}
@@ -277,7 +309,7 @@ public class DollchanPostsParser {
 			}
 			return true;
 		})
-		.equals("div", "class", "message")
+		.equals("div", "class", "post-message")
 		.content((instance, holder, text) -> {
 			text = text.trim();
 			int index = text.lastIndexOf("<div class=\"abbrev\">");
