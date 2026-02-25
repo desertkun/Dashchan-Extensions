@@ -30,6 +30,7 @@ public final class E444IpRequestPerformer {
 				if (requestConfigurator != null) {
 					request = requestConfigurator.configure(request);
 				}
+				request.addCookie("usercode_auth", "foobar");
 				return request.perform();
 			} catch (HttpException e) {
 				if (e.isSocketException()) {

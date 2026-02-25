@@ -8,19 +8,21 @@ import java.util.regex.Pattern;
 
 public class E444ChanLocator extends ChanLocator {
 	public static final String CHAN_HOST = "ech.bz";
+	public static final String CHAN_HOST_ALT = "ech.ist";
 
-	private static final Pattern BOARD_PATH = Pattern.compile("/\\w+(?:/(?:(?:index|catalog|\\d+)\\.html)?)?");
-	private static final Pattern THREAD_PATH = Pattern.compile("/\\w+/res/(\\d+)\\.html");
-	private static final Pattern ATTACHMENT_PATH = Pattern.compile("/\\w+/src/(\\d+)/\\d+\\.\\w+");
+	private static final Pattern BOARD_PATH = Pattern.compile("/[\\w-]+(?:/(?:(?:index|catalog|\\d+)\\.html)?)?");
+	private static final Pattern THREAD_PATH = Pattern.compile("/[\\w-]+/res/(\\d+)\\.html");
+	private static final Pattern ATTACHMENT_PATH = Pattern.compile("/[\\w-]+/src/(\\d+)/\\d+\\.\\w+");
 
 	public E444ChanLocator() {
 		addChanHost(CHAN_HOST);
+		addChanHost(CHAN_HOST_ALT);
 		setHttpsMode(HttpsMode.HTTPS_ONLY);
 	}
 
 	private boolean isKnownHostOrRelative(Uri uri) {
 		String host = uri.getHost();
-		return host == null || CHAN_HOST.equals(host) || E444Web3HostResolver.isResolvedHost(host);
+		return isChanHostOrRelative(uri) || host != null && E444Web3HostResolver.isResolvedHost(host);
 	}
 
 	@Override

@@ -3,7 +3,7 @@ apply plugin: 'chan-extension'
 chan {
 	versionName '1.0'
 	apiVersion 1
-	hosts 'ech.bz'
+	hosts 'ech.bz', 'ech.ist'
 }
 
 dependencies {
