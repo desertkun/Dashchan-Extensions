@@ -1,4 +1,5 @@
 apply plugin: 'chan-extension'
+apply plugin: 'com.diffplug.spotless'
 
 chan {
 	versionName '1.0'
@@ -8,4 +9,14 @@ chan {
 
 dependencies {
 	implementation 'org.web3j:abi:4.8.9'
+	implementation 'com.google.android.flexbox:flexbox:3.0.0'
+	compileOnly 'org.projectlombok:lombok:1.18.38'
+	annotationProcessor 'org.projectlombok:lombok:1.18.38'
+}
+
+spotless {
+	java {
+		target 'src/**/*.java'
+		palantirJavaFormat()
+	}
 }
