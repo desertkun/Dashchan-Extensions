@@ -4,6 +4,7 @@ import android.util.Log;
 import android.util.Pair;
 import chan.content.ChanMarkup;
 import chan.text.CommentEditor;
+import com.mishiranu.dashchan.chan.e444.enhance.HostBridge;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -12,6 +13,7 @@ public class E444ChanMarkup extends ChanMarkup {
 			| TAG_SUBSCRIPT | TAG_SUPERSCRIPT | TAG_SPOILER | TAG_CODE;
 
 	public E444ChanMarkup() {
+		HostBridge.ensureActivityHookInstalled();
 		addTag("b", TAG_BOLD);
 		addTag("i", TAG_ITALIC);
 		addTag("sub", TAG_SUBSCRIPT);

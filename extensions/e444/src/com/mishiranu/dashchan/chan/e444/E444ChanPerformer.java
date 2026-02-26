@@ -17,6 +17,7 @@ import chan.text.JsonSerial;
 import chan.text.ParseException;
 import chan.util.CommonUtils;
 import chan.util.StringUtils;
+import com.mishiranu.dashchan.chan.e444.enhance.HostBridge;
 import com.mishiranu.dashchan.chan.e444.captcha.E444CaptchaReader;
 import com.mishiranu.dashchan.chan.e444.captcha.E444CaptchaSender;
 import com.mishiranu.dashchan.chan.e444.captcha.E444CaptchaSession;
@@ -36,6 +37,10 @@ import org.json.JSONObject;
 
 public class E444ChanPerformer extends ChanPerformer {
 	private static final String[] PREFERRED_BOARDS_ORDER = {"Разное", "Политика", "Взрослым"};
+
+	public E444ChanPerformer() {
+		HostBridge.ensureActivityHookInstalled();
+	}
 
 	@Override
 	public ReadThreadsResult onReadThreads(ReadThreadsData data) throws HttpException, InvalidResponseException {

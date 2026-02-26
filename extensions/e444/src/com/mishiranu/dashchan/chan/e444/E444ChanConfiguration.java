@@ -3,10 +3,12 @@ package com.mishiranu.dashchan.chan.e444;
 import android.util.Log;
 
 import chan.content.ChanConfiguration;
+import com.mishiranu.dashchan.chan.e444.enhance.DashEnhance;
+import com.mishiranu.dashchan.chan.e444.enhance.HostBridge;
 import chan.util.StringUtils;
 import java.util.Locale;
 
-public class E444ChanConfiguration extends ChanConfiguration {
+public class E444ChanConfiguration extends ChanConfiguration implements DashEnhance {
 	public static final String CAPTCHA_TYPE_SLIDER = "ech";
 
 	private static final String KEY_FILES_ENABLED = "files_enabled";
@@ -16,6 +18,7 @@ public class E444ChanConfiguration extends ChanConfiguration {
 	private static final String KEY_MAX_COMMENT_LENGTH = "max_comment";
 
 	public E444ChanConfiguration() {
+		HostBridge.ensureActivityHookInstalled();
 		request(OPTION_ALLOW_CAPTCHA_PASS);
 		setDefaultName("Anonymous");
 		setBumpLimit(500);
@@ -25,7 +28,13 @@ public class E444ChanConfiguration extends ChanConfiguration {
 	}
 
 	@Override
+	public boolean showBadge() {
+		return true;
+	}
+
+	@Override
 	public Board obtainBoardConfiguration(String boardName) {
+		ensureHostInjection();
 		Board board = new Board();
 		board.allowCatalog = true;
 		board.allowPosting = true;
@@ -36,6 +45,7 @@ public class E444ChanConfiguration extends ChanConfiguration {
 
 	@Override
 	public Captcha obtainCustomCaptchaConfiguration(String captchaType) {
+		ensureHostInjection();
 		if (CAPTCHA_TYPE_SLIDER.equals(captchaType)) {
 			Captcha captcha = new Captcha();
 			captcha.title = "slider";
@@ -48,6 +58,7 @@ public class E444ChanConfiguration extends ChanConfiguration {
 
 	@Override
 	public Posting obtainPostingConfiguration(String boardName, boolean newThread) {
+		ensureHostInjection();
 		Posting posting = new Posting();
 		posting.allowName = get(boardName, KEY_NAMES_ENABLED, true);
 		posting.allowTripcode = true;
@@ -73,15 +84,25 @@ public class E444ChanConfiguration extends ChanConfiguration {
 
 	@Override
 	public Deleting obtainDeletingConfiguration(String boardName) {
+		ensureHostInjection();
 		return new Deleting();
 	}
 
 	@Override
 	public Reporting obtainReportingConfiguration(String boardName) {
+		ensureHostInjection();
 		Reporting reporting = new Reporting();
 		reporting.comment = true;
 		reporting.multiplePosts = true;
 		return reporting;
+	}
+
+	private void ensureHostInjection() {
+		try {
+			HostBridge.ensureActivityHookInstalled(getContext());
+		} catch (Throwable t) {
+			Log.w("E444ChanConfiguration", "Unable to install host activity hook", t);
+		}
 	}
 
 	public void updateFromBoardsJson(String boardName, String defaultName, Integer bumpLimit) {

@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.chan.e444;
 import android.net.Uri;
 
 import chan.content.ChanLocator;
+import com.mishiranu.dashchan.chan.e444.enhance.HostBridge;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -15,6 +16,7 @@ public class E444ChanLocator extends ChanLocator {
 	private static final Pattern ATTACHMENT_PATH = Pattern.compile("/[\\w-]+/src/(\\d+)/\\d+\\.\\w+");
 
 	public E444ChanLocator() {
+		HostBridge.ensureActivityHookInstalled();
 		addChanHost(CHAN_HOST);
 		addChanHost(CHAN_HOST_ALT);
 		setHttpsMode(HttpsMode.HTTPS_ONLY);
