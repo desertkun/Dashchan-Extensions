@@ -5,7 +5,6 @@ import android.os.Build;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import com.mishiranu.dashchan.chan.e444.enhance.controllers.EnhanceController;
-import com.mishiranu.dashchan.chan.e444.enhance.controllers.EnhanceControllerBadge;
 import com.mishiranu.dashchan.chan.e444.enhance.controllers.EnhanceControllerPostExtension;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
@@ -16,7 +15,7 @@ import java.util.WeakHashMap;
 
 final class EnhanceControllersManager {
     private static final List<EnhanceController> CONTROLLERS = Collections.unmodifiableList(
-            Arrays.asList(EnhanceControllerBadge.getInstance(), EnhanceControllerPostExtension.getInstance()));
+            Arrays.asList(EnhanceControllerPostExtension.getInstance()));
     private static final Map<Activity, ActivityStateObserver> activityStateObservers =
             Collections.synchronizedMap(new WeakHashMap<Activity, ActivityStateObserver>());
 

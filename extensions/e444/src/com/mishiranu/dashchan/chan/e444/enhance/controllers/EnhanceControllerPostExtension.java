@@ -15,13 +15,15 @@ import java.util.Locale;
 import java.util.Map;
 
 public final class EnhanceControllerPostExtension implements EnhanceController {
+    private static final String E444_PACKAGE_PREFIX = "com.mishiranu.dashchan.chan.e444.";
     private static final EnhanceControllerPostExtension INSTANCE = new EnhanceControllerPostExtension();
     private static final PostWidgetStore<EnhanceWidget> postExtensionItemsStore = new PostWidgetStore<>();
     private static final EnhanceHostResolver.ChanComponentMatcher ENHANCE_MATCHER =
             new EnhanceHostResolver.ChanComponentMatcher() {
                 @Override
                 public boolean matches(Object component) {
-                    return component instanceof DashEnhance;
+                    return component != null
+                            && component.getClass().getName().startsWith(E444_PACKAGE_PREFIX);
                 }
             };
 
