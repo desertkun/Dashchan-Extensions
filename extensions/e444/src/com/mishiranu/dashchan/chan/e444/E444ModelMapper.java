@@ -6,14 +6,18 @@ import chan.content.model.Posts;
 import chan.text.JsonSerial;
 import chan.text.ParseException;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.chan.e444.enhance.controllers.EnhanceControllerPostExtension;
-import com.mishiranu.dashchan.chan.e444.enhance.widgets.MenuWidget;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
+import com.mishiranu.dashchan.chan.e444.enhance.controllers.HookPost;
+import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetMenu;
+import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReactions;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
 public class E444ModelMapper {
+    private static final String TAG = "E444ModelMapper";
+
     public static class Extra {
         private ArrayList<Post> posts;
         private boolean hasPosts;
@@ -125,12 +129,14 @@ public class E444ModelMapper {
         return fileAttachment;
     }
 
-    public static Post createPost(JsonSerial.Reader reader, Object linked, Extra extra)
+    public static Post createPost(JsonSerial.Reader reader, Object linked, Extra extra, String boardNameContext)
             throws IOException, ParseException {
         E444ChanLocator locator = E444ChanLocator.get(linked);
         Post post = new Post();
         int postNumber = 0;
-        MenuWidget menuWidget = null;
+        String boardName = boardNameContext;
+        WidgetMenu menuWidget = null;
+        WidgetReactions reactionsWidget = null;
         String name = null;
         String tripcode = null;
 
@@ -140,6 +146,10 @@ public class E444ModelMapper {
                 case "num": {
                     postNumber = reader.nextInt();
                     post.setPostNumber(Integer.toString(postNumber));
+                    break;
+                }
+                case "board": {
+                    boardName = reader.nextString();
                     break;
                 }
                 case "parent": {
@@ -227,7 +237,7 @@ public class E444ModelMapper {
                         extra.hasPosts = true;
                         reader.startArray();
                         while (!reader.endStruct()) {
-                            extra.posts.add(createPost(reader, locator, null));
+                            extra.posts.add(createPost(reader, locator, null, boardNameContext));
                         }
                     } else {
                         reader.skip();
@@ -235,7 +245,15 @@ public class E444ModelMapper {
                     break;
                 }
                 case "menu": {
-                    menuWidget = new MenuWidget(reader, locator);
+                    menuWidget = new WidgetMenu(reader, locator);
+                    break;
+                }
+                case "reactions": {
+                    if (reader.valueType() == JsonSerial.ValueType.ARRAY) {
+                        reactionsWidget = new WidgetReactions(reader, locator);
+                    } else {
+                        reader.skip();
+                    }
                     break;
                 }
                 default: {
@@ -244,10 +262,15 @@ public class E444ModelMapper {
                 }
             }
         }
-        EnhanceControllerPostExtension.clearWidgetsForPost(postNumber);
+        ArrayList<EnhanceWidget> widgetsForPost = new ArrayList<>();
         if (menuWidget != null && !menuWidget.isEmpty()) {
-            EnhanceControllerPostExtension.addWidgetForPost(postNumber, menuWidget);
+            widgetsForPost.add(menuWidget);
         }
+        if (reactionsWidget != null && !reactionsWidget.isEmpty()) {
+            reactionsWidget.setPostContext(boardName, postNumber);
+            widgetsForPost.add(reactionsWidget);
+        }
+        HookPost.setWidgetsForPost(boardName, postNumber, widgetsForPost);
 
         String capcode = null;
         if (!StringUtils.isEmpty(tripcode)) {
@@ -272,22 +295,24 @@ public class E444ModelMapper {
         return post;
     }
 
-    public static ArrayList<Post> createPosts(JsonSerial.Reader reader, Object linked, Extra extra)
+    public static ArrayList<Post> createPosts(
+            JsonSerial.Reader reader, Object linked, Extra extra, String boardNameContext)
             throws IOException, ParseException {
         boolean firstPost = true;
         ArrayList<Post> posts = new ArrayList<>();
         reader.startArray();
         while (!reader.endStruct()) {
-            posts.add(createPost(reader, linked, firstPost ? extra : null));
+            posts.add(createPost(reader, linked, firstPost ? extra : null, boardNameContext));
             firstPost = false;
         }
         return posts;
     }
 
-    public static Posts createThread(JsonSerial.Reader reader, Object linked) throws IOException, ParseException {
+    public static Posts createThread(JsonSerial.Reader reader, Object linked, String boardNameContext)
+            throws IOException, ParseException {
         Extra extra = new Extra();
         extra.posts = new ArrayList<>();
-        Post post = createPost(reader, linked, extra);
+        Post post = createPost(reader, linked, extra, boardNameContext);
         // Different data format for thread lists and catalog
         List<Post> posts = extra.hasPosts ? extra.posts : Collections.singletonList(post);
         if (!posts.isEmpty() && posts.get(0).getAttachmentsCount() > 0) {

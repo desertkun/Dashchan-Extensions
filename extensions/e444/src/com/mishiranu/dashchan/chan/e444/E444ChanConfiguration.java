@@ -3,7 +3,7 @@ package com.mishiranu.dashchan.chan.e444;
 import android.util.Log;
 import chan.content.ChanConfiguration;
 import chan.util.StringUtils;
-import com.mishiranu.dashchan.chan.e444.enhance.HostBridge;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceShim;
 import java.util.Locale;
 
 public class E444ChanConfiguration extends ChanConfiguration {
@@ -16,7 +16,7 @@ public class E444ChanConfiguration extends ChanConfiguration {
     private static final String KEY_MAX_COMMENT_LENGTH = "max_comment";
 
     public E444ChanConfiguration() {
-        HostBridge.ensureActivityHookInstalled();
+        EnhanceShim.ensureActivityHookInstalled();
         request(OPTION_ALLOW_CAPTCHA_PASS);
         setDefaultName("Anonymous");
         setBumpLimit(500);
@@ -92,7 +92,7 @@ public class E444ChanConfiguration extends ChanConfiguration {
 
     private void ensureHostInjection() {
         try {
-            HostBridge.ensureActivityHookInstalled(getContext());
+            EnhanceShim.ensureActivityHookInstalled(getContext());
         } catch (Throwable t) {
             Log.w("E444ChanConfiguration", "Unable to install host activity hook", t);
         }

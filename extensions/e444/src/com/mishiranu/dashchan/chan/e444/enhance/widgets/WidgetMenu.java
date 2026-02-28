@@ -8,7 +8,6 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -20,7 +19,8 @@ import com.google.android.flexbox.FlexWrap;
 import com.google.android.flexbox.FlexboxLayout;
 import com.google.android.flexbox.JustifyContent;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
-import com.mishiranu.dashchan.chan.e444.enhance.EnhanceHostResolver;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceReflection;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.WeakHashMap;
 import lombok.EqualsAndHashCode;
 
-public final class MenuWidget implements EnhanceWidget {
-    public static final String CONTAINER_TAG = "e444_post_injected_buttons_container";
+public final class WidgetMenu implements EnhanceWidget {
+    public static final String CONTAINER_TAG = "e444_post_injected_menu_container";
     private static final Map<LinearLayout, List<MenuSection>> BOUND_SECTIONS =
             Collections.synchronizedMap(new WeakHashMap<LinearLayout, List<MenuSection>>());
 
@@ -83,7 +83,7 @@ public final class MenuWidget implements EnhanceWidget {
         }
     }
 
-    public MenuWidget(JsonSerial.Reader reader, E444ChanLocator locator) throws IOException, ParseException {
+    public WidgetMenu(JsonSerial.Reader reader, E444ChanLocator locator) throws IOException, ParseException {
         this.locator = locator;
         ArrayList<MenuSection> parsedSections = new ArrayList<>();
         reader.startArray();
@@ -120,11 +120,28 @@ public final class MenuWidget implements EnhanceWidget {
     }
 
     @Override
-    public void bind(Activity activity, ViewGroup postRoot) {
+    public String getContainerTag() {
+        return CONTAINER_TAG;
+    }
+
+    @Override
+    public ViewGroup.LayoutParams createLayoutParams(Activity activity) {
+        int margin = dp(activity, 6);
+        LinearLayout.LayoutParams layoutParams =
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        layoutParams.leftMargin = margin;
+        layoutParams.topMargin = margin;
+        layoutParams.rightMargin = margin;
+        layoutParams.bottomMargin = margin;
+        return layoutParams;
+    }
+
+    @Override
+    public void inject(Activity activity, ViewGroup postRoot) {
         View existingContainerView = postRoot.findViewWithTag(CONTAINER_TAG);
         if (existingContainerView == null) {
             LinearLayout container = createContainer(activity);
-            postRoot.addView(container, createLayoutParams(activity, postRoot));
+            postRoot.addView(container);
             existingContainerView = container;
         }
         LinearLayout container = (LinearLayout) existingContainerView;
@@ -132,19 +149,8 @@ public final class MenuWidget implements EnhanceWidget {
         if (oldSections != null && oldSections.equals(sections)) {
             return;
         }
-        rebuild(activity, container, sections);
+        applySections(activity, container, sections);
         BOUND_SECTIONS.put(container, sections);
-    }
-
-    @Override
-    public void clear(ViewGroup postRoot) {
-        View existingContainerView = postRoot.findViewWithTag(CONTAINER_TAG);
-        if (existingContainerView instanceof LinearLayout) {
-            BOUND_SECTIONS.remove(existingContainerView);
-        }
-        if (existingContainerView != null && existingContainerView.getParent() instanceof ViewGroup) {
-            ((ViewGroup) existingContainerView.getParent()).removeView(existingContainerView);
-        }
     }
 
     private static LinearLayout createContainer(Activity activity) {
@@ -157,43 +163,109 @@ public final class MenuWidget implements EnhanceWidget {
         return container;
     }
 
-    private void rebuild(Activity activity, LinearLayout container, List<MenuSection> sections) {
-        container.removeAllViews();
+    private void applySections(Activity activity, LinearLayout container, List<MenuSection> sections) {
         for (int sectionIndex = 0; sectionIndex < sections.size(); sectionIndex++) {
             MenuSection section = sections.get(sectionIndex);
-            TextView titleView = new TextView(activity);
+            int titleIndex = sectionIndex * 2;
+            TextView titleView = obtainOrCreateTitleView(activity, container, titleIndex);
             titleView.setText(section.title);
-            LinearLayout.LayoutParams titleLayoutParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            titleLayoutParams.topMargin = dp(activity, 6);
-            container.addView(titleView, titleLayoutParams);
-            FlexboxLayout linksLayout = new FlexboxLayout(activity);
-            linksLayout.setFlexDirection(FlexDirection.ROW);
-            linksLayout.setFlexWrap(FlexWrap.WRAP);
-            linksLayout.setJustifyContent(JustifyContent.FLEX_START);
-            linksLayout.setAlignItems(AlignItems.FLEX_START);
-            LinearLayout.LayoutParams linksLayoutParams = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            linksLayoutParams.topMargin = dp(activity, 3);
-            container.addView(linksLayout, linksLayoutParams);
+            FlexboxLayout linksLayout = obtainOrCreateLinksLayout(activity, container, titleIndex + 1);
             for (int i = 0; i < section.links.size(); i++) {
                 final MenuLink menuItem = section.links.get(i);
-                Button button = new Button(activity);
+                Button button = obtainOrCreateButton(activity, linksLayout, i);
                 button.setText(menuItem.label);
                 button.setTag(menuItem.url);
                 button.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        performAction(activity, MenuWidget.this.locator, menuItem.url);
+                        performAction(activity, WidgetMenu.this.locator, menuItem.url);
                     }
                 });
-                FlexboxLayout.LayoutParams buttonLayoutParams = new FlexboxLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                buttonLayoutParams.rightMargin = dp(activity, 4);
-                buttonLayoutParams.bottomMargin = dp(activity, 4);
-                linksLayout.addView(button, buttonLayoutParams);
+            }
+            while (linksLayout.getChildCount() > section.links.size()) {
+                linksLayout.removeViewAt(linksLayout.getChildCount() - 1);
             }
         }
+        int expectedChildrenCount = sections.size() * 2;
+        while (container.getChildCount() > expectedChildrenCount) {
+            container.removeViewAt(container.getChildCount() - 1);
+        }
+    }
+
+    private static TextView obtainOrCreateTitleView(Activity activity, LinearLayout container, int index) {
+        View existing = index < container.getChildCount() ? container.getChildAt(index) : null;
+        if (existing instanceof TextView) {
+            return (TextView) existing;
+        }
+        TextView titleView = new TextView(activity);
+        if (index < container.getChildCount()) {
+            container.removeViewAt(index);
+            container.addView(titleView, index, createTitleLayoutParams(activity));
+        } else {
+            container.addView(titleView, createTitleLayoutParams(activity));
+        }
+        return titleView;
+    }
+
+    private static FlexboxLayout obtainOrCreateLinksLayout(Activity activity, LinearLayout container, int index) {
+        View existing = index < container.getChildCount() ? container.getChildAt(index) : null;
+        if (existing instanceof FlexboxLayout) {
+            return (FlexboxLayout) existing;
+        }
+        FlexboxLayout linksLayout = createLinksLayout(activity);
+        if (index < container.getChildCount()) {
+            container.removeViewAt(index);
+            container.addView(linksLayout, index, createLinksLayoutParams(activity));
+        } else {
+            container.addView(linksLayout, createLinksLayoutParams(activity));
+        }
+        return linksLayout;
+    }
+
+    private static Button obtainOrCreateButton(Activity activity, FlexboxLayout linksLayout, int index) {
+        View existing = index < linksLayout.getChildCount() ? linksLayout.getChildAt(index) : null;
+        if (existing instanceof Button) {
+            return (Button) existing;
+        }
+        Button button = new Button(activity);
+        if (index < linksLayout.getChildCount()) {
+            linksLayout.removeViewAt(index);
+            linksLayout.addView(button, index, createButtonLayoutParams(activity));
+        } else {
+            linksLayout.addView(button, createButtonLayoutParams(activity));
+        }
+        return button;
+    }
+
+    private static LinearLayout.LayoutParams createTitleLayoutParams(Activity activity) {
+        LinearLayout.LayoutParams titleLayoutParams =
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleLayoutParams.topMargin = dp(activity, 6);
+        return titleLayoutParams;
+    }
+
+    private static FlexboxLayout createLinksLayout(Activity activity) {
+        FlexboxLayout linksLayout = new FlexboxLayout(activity);
+        linksLayout.setFlexDirection(FlexDirection.ROW);
+        linksLayout.setFlexWrap(FlexWrap.WRAP);
+        linksLayout.setJustifyContent(JustifyContent.FLEX_START);
+        linksLayout.setAlignItems(AlignItems.FLEX_START);
+        return linksLayout;
+    }
+
+    private static LinearLayout.LayoutParams createLinksLayoutParams(Activity activity) {
+        LinearLayout.LayoutParams linksLayoutParams =
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        linksLayoutParams.topMargin = dp(activity, 3);
+        return linksLayoutParams;
+    }
+
+    private static FlexboxLayout.LayoutParams createButtonLayoutParams(Activity activity) {
+        FlexboxLayout.LayoutParams buttonLayoutParams = new FlexboxLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        buttonLayoutParams.rightMargin = dp(activity, 4);
+        buttonLayoutParams.bottomMargin = dp(activity, 4);
+        return buttonLayoutParams;
     }
 
     private static void performAction(Activity activity, E444ChanLocator locator, String target) {
@@ -201,14 +273,13 @@ public final class MenuWidget implements EnhanceWidget {
         if (locator.isBoardUri(targetUri) || locator.isThreadUri(targetUri) || locator.isAttachmentUri(targetUri)) {
             if (tryStartActivity(
                     activity,
-                    new Intent(EnhanceHostResolver.ACTION_HANDLE_URI, targetUri)
-                            .setPackage(activity.getPackageName()))) {
+                    new Intent(EnhanceReflection.ACTION_HANDLE_URI, targetUri).setPackage(activity.getPackageName()))) {
                 return;
             }
             if (tryStartActivity(
                     activity,
                     new Intent()
-                            .setClassName(activity, EnhanceHostResolver.URI_HANDLER_ACTIVITY)
+                            .setClassName(activity, EnhanceReflection.URI_HANDLER_ACTIVITY)
                             .setData(targetUri))) {
                 return;
             }
@@ -239,18 +310,6 @@ public final class MenuWidget implements EnhanceWidget {
         } catch (Throwable t) {
             return false;
         }
-    }
-
-    private static ViewGroup.LayoutParams createLayoutParams(Activity activity, ViewGroup parent) {
-        int margin = dp(activity, 6);
-        FrameLayout.LayoutParams layoutParams =
-                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        layoutParams.gravity = Gravity.END | Gravity.BOTTOM;
-        layoutParams.leftMargin = margin;
-        layoutParams.topMargin = margin;
-        layoutParams.rightMargin = margin;
-        layoutParams.bottomMargin = margin;
-        return layoutParams;
     }
 
     private static int dp(Activity activity, int value) {
