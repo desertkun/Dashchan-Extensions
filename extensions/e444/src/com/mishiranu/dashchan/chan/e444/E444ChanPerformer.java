@@ -20,6 +20,7 @@ import com.mishiranu.dashchan.chan.e444.captcha.E444CaptchaReader;
 import com.mishiranu.dashchan.chan.e444.captcha.E444CaptchaSender;
 import com.mishiranu.dashchan.chan.e444.captcha.E444CaptchaSession;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceShim;
+import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReaction;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
@@ -39,6 +40,49 @@ public class E444ChanPerformer extends ChanPerformer {
 
     public E444ChanPerformer() {
         EnhanceShim.ensureActivityHookInstalled();
+    }
+
+    private static void parseBoardAndApplyReactionIcons(
+            JsonSerial.Reader reader, String boardName, E444ModelMapper.BoardConfiguration boardConfiguration)
+            throws IOException, ParseException {
+        ArrayList<String> reactions = null;
+        boolean reactionsEnabled = true;
+        reader.startObject();
+        while (!reader.endStruct()) {
+            String boardFieldName = reader.nextName();
+            switch (boardFieldName) {
+                case "reactions": {
+                    reactions = new ArrayList<>();
+                    reader.startArray();
+                    while (!reader.endStruct()) {
+                        reactions.add(reader.nextString());
+                    }
+                    break;
+                }
+                case "enable_reactions": {
+                    reactionsEnabled = reader.nextInt() != 0;
+                    if (!reactionsEnabled) {
+                        reactions = null;
+                    }
+                    break;
+                }
+                case "name": {
+                    boardConfiguration.title = reader.nextString();
+                    break;
+                }
+                case "info": {
+                    boardConfiguration.description = reader.nextString();
+                    break;
+                }
+                default: {
+                    if (!boardConfiguration.handle(reader, boardFieldName)) {
+                        reader.skip();
+                    }
+                    break;
+                }
+            }
+        }
+        WidgetReaction.setBoardReactionIcons(boardName, reactionsEnabled ? reactions : null);
     }
 
     @Override
@@ -70,6 +114,10 @@ public class E444ChanPerformer extends ChanPerformer {
                         }
                         case "board_speed": {
                             boardSpeed = reader.nextInt();
+                            break;
+                        }
+                        case "board": {
+                            parseBoardAndApplyReactionIcons(reader, data.boardName, boardConfiguration);
                             break;
                         }
                         default: {
@@ -128,6 +176,10 @@ public class E444ChanPerformer extends ChanPerformer {
                         }
                         case "counter_posters": {
                             uniquePosters = reader.nextInt();
+                            break;
+                        }
+                        case "board": {
+                            parseBoardAndApplyReactionIcons(reader, data.boardName, boardConfiguration);
                             break;
                         }
                         default: {

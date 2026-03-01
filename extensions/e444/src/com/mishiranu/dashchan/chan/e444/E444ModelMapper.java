@@ -9,11 +9,14 @@ import chan.util.StringUtils;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
 import com.mishiranu.dashchan.chan.e444.enhance.controllers.HookPost;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetMenu;
-import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReactions;
+import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReaction;
+import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReactionsContextMenu;
+import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReactionsPost;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class E444ModelMapper {
     private static final String TAG = "E444ModelMapper";
@@ -136,7 +139,7 @@ public class E444ModelMapper {
         int postNumber = 0;
         String boardName = boardNameContext;
         WidgetMenu menuWidget = null;
-        WidgetReactions reactionsWidget = null;
+        WidgetReactionsPost reactionsWidget = null;
         String name = null;
         String tripcode = null;
 
@@ -250,7 +253,7 @@ public class E444ModelMapper {
                 }
                 case "reactions": {
                     if (reader.valueType() == JsonSerial.ValueType.ARRAY) {
-                        reactionsWidget = new WidgetReactions(reader, locator);
+                        reactionsWidget = new WidgetReactionsPost(reader, locator);
                     } else {
                         reader.skip();
                     }
@@ -271,6 +274,17 @@ public class E444ModelMapper {
             widgetsForPost.add(reactionsWidget);
         }
         HookPost.setWidgetsForPost(boardName, postNumber, widgetsForPost);
+
+        ArrayList<EnhanceWidget> widgetsForContextMenu = new ArrayList<>();
+        List<String> contextMenuReactionIcons = WidgetReaction.getBoardReactionIcons(boardName).stream()
+                .filter(iconName -> !StringUtils.isEmpty(iconName))
+                .collect(Collectors.toList());
+        if (!contextMenuReactionIcons.isEmpty()) {
+            WidgetReactionsContextMenu widget = new WidgetReactionsContextMenu(locator, contextMenuReactionIcons);
+            widget.setPostContext(boardName, postNumber);
+            widgetsForContextMenu.add(widget);
+        }
+        HookPost.setContextMenuWidgetsForPost(boardName, postNumber, widgetsForContextMenu);
 
         String capcode = null;
         if (!StringUtils.isEmpty(tripcode)) {

@@ -1,6 +1,7 @@
 package com.mishiranu.dashchan.chan.e444.enhance.controllers;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.util.Log;
 import android.view.View;
@@ -28,7 +29,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class HookPost implements EnhanceHook {
     private static final String TAG = "HookPost";
     private static final HookPost INSTANCE = new HookPost();
+    public static final int TAG_CONTEXT_MENU_CLOSE_ACTION = 0xE4441001;
     private static final String ROOT_TAG = "e444_post_extension_root";
+    private static final String CONTEXT_MENU_WRAPPER_TAG = "e444_context_menu_wrapper";
+    private static final String CONTEXT_MENU_EXTENSION_ROOT_TAG = "e444_context_menu_extension_root";
     private static final String PROXY_CACHE_DIR = "e444_proxy";
     private static final String[][] CONSTRUCTOR_PROFILES = {
         {
@@ -87,7 +91,10 @@ public final class HookPost implements EnhanceHook {
         }
     };
     private static final Map<String, List<EnhanceWidget>> widgetsByPostKey = new ConcurrentHashMap<>();
+    private static final Map<String, List<EnhanceWidget>> contextMenuWidgetsByPostKey = new ConcurrentHashMap<>();
     private static final Map<ViewGroup, Object> wrappedAdaptersByCollection = new WeakHashMap<>();
+    private static final Map<Object, Object> wrappedInteractionsByUiManager = new WeakHashMap<>();
+    private static final Map<Object, Object> wrappedDialogsByUiManager = new WeakHashMap<>();
 
     private HookPost() {}
 
@@ -109,6 +116,26 @@ public final class HookPost implements EnhanceHook {
         widgetsByPostKey.put(key, new ArrayList<>(widgets));
     }
 
+    public static void setContextMenuWidgetsForPost(String boardName, int postNumber, List<EnhanceWidget> widgets) {
+        String key = buildPostKey(boardName, postNumber);
+        if (widgets == null || widgets.isEmpty()) {
+            contextMenuWidgetsByPostKey.remove(key);
+            return;
+        }
+        ArrayList<EnhanceWidget> sanitized = new ArrayList<>(widgets.size());
+        for (int i = 0; i < widgets.size(); i++) {
+            EnhanceWidget widget = widgets.get(i);
+            if (widget != null) {
+                sanitized.add(widget);
+            }
+        }
+        if (sanitized.isEmpty()) {
+            contextMenuWidgetsByPostKey.remove(key);
+        } else {
+            contextMenuWidgetsByPostKey.put(key, sanitized);
+        }
+    }
+
     @Override
     public void apply(Activity activity) {
         if (activity.isFinishing() || EnhanceReflection.isActivityDestroyed(activity)) return;
@@ -116,12 +143,16 @@ public final class HookPost implements EnhanceHook {
         ViewGroup postsCollection = EnhanceReflection.resolvePostsCollectionView(activity);
         if (postsCollection == null) return;
         Object currentAdapter = EnhanceReflection.invokeNoArgs(postsCollection, "getAdapter");
-        if (currentAdapter == null || wrappedAdaptersByCollection.get(postsCollection) == currentAdapter) return;
+        if (currentAdapter == null) return;
+        contextHandleAdapterObserved(activity, currentAdapter);
+        if (wrappedAdaptersByCollection.get(postsCollection) == currentAdapter) return;
         if (isAlreadyWrappedAdapter(currentAdapter)) {
             wrappedAdaptersByCollection.put(postsCollection, currentAdapter);
             return;
         }
-        wrappedAdaptersByCollection.put(postsCollection, wrapAndInstall(activity, postsCollection, currentAdapter));
+        Object wrappedAdapter = wrapAndInstall(activity, postsCollection, currentAdapter);
+        wrappedAdaptersByCollection.put(postsCollection, wrappedAdapter);
+        contextHandleAdapterObserved(activity, wrappedAdapter);
     }
 
     @Override
@@ -130,7 +161,9 @@ public final class HookPost implements EnhanceHook {
         if (postsCollection == null) return;
         for (int i = 0; i < postsCollection.getChildCount(); i++) {
             View child = postsCollection.getChildAt(i);
-            if (child instanceof ViewGroup) clearRoot((ViewGroup) child);
+            if (!(child instanceof ViewGroup)) continue;
+            ViewGroup postRoot = (ViewGroup) child;
+            inlineHandleOnRecycle(postRoot);
         }
     }
 
@@ -154,6 +187,10 @@ public final class HookPost implements EnhanceHook {
             if (container != null && container.getParent() == root)
                 container.setLayoutParams(widget.createLayoutParams(activity));
         }
+    }
+
+    static void inlineHandleOnBind(Activity activity, ViewGroup collectionView, ViewGroup postRoot, int position) {
+        bindWidgets(activity, collectionView, postRoot, position);
     }
 
     private static int bottomBarId(Activity activity) {
@@ -229,6 +266,391 @@ public final class HookPost implements EnhanceHook {
         if (root instanceof ViewGroup) ((ViewGroup) root).removeAllViews();
     }
 
+    static void inlineHandleOnRecycle(ViewGroup postRoot) {
+        clearRoot(postRoot);
+    }
+
+    private static void contextHandleAdapterObserved(Activity activity, Object adapter) {
+        maybeAttachContextMenuWidgets(activity, adapter);
+    }
+
+    private static void contextHandlePostLongClick(Object configurationSet, Object postItem) {
+        if (maybeAttachContextMenuWidgetsFromConfigurationSet(configurationSet, postItem, null)) {
+            return;
+        }
+        Activity activity = resolveActivityFromConfigurationSet(configurationSet);
+        View decorView = activity != null ? EnhanceReflection.getDecorViewSafe(activity) : null;
+        if (decorView == null) {
+            return;
+        }
+        scheduleContextMenuAttachRetry(decorView, configurationSet, postItem, 6);
+    }
+
+    private static void contextHandlePostContextMenuDialog(
+            Object configurationSet, Object postNumberObject, AlertDialog dialog, Activity knownActivity) {
+        if (dialog == null) {
+            Log.d(TAG, "contextHandlePostContextMenuDialog: skip dialog null");
+            return;
+        }
+        Activity activity = knownActivity != null ? knownActivity : resolveActivity(dialog, configurationSet);
+        if (activity == null || activity.isFinishing() || EnhanceReflection.isActivityDestroyed(activity)) {
+            Log.d(TAG, "contextHandlePostContextMenuDialog: skip activity invalid");
+            return;
+        }
+        Integer postNumber = parsePostNumber(postNumberObject);
+        if (postNumber == null || postNumber <= 0) {
+            Log.d(TAG, "contextHandlePostContextMenuDialog: skip post invalid " + postNumberObject);
+            return;
+        }
+        String boardName = resolveBoardNameForContextMenu(configurationSet, postNumberObject, activity);
+        if (boardName == null || boardName.isEmpty()) {
+            Log.d(TAG, "contextHandlePostContextMenuDialog: skip board unresolved");
+            return;
+        }
+        String postKey = buildPostKey(boardName, postNumber);
+        List<EnhanceWidget> widgets = contextMenuWidgetsByPostKey.get(postKey);
+        if (widgets == null || widgets.isEmpty()) {
+            Log.d(TAG, "contextHandlePostContextMenuDialog: skip no widgets for post " + postKey);
+            return;
+        }
+        if (attachContextMenuWidgetsView(activity, dialog, widgets)) {
+            return;
+        }
+        View decorView = EnhanceReflection.getDecorViewSafe(activity);
+        scheduleAttachToKnownDialog(decorView, activity, dialog, widgets, 8);
+    }
+
+    private static void maybeAttachContextMenuWidgets(Activity activity, Object adapter) {
+        Object configurationSet = resolveConfigurationSetFromAdapter(adapter);
+        maybeAttachContextMenuWidgetsFromConfigurationSet(configurationSet, null, activity);
+    }
+
+    private static boolean maybeAttachContextMenuWidgetsFromConfigurationSet(
+            Object configurationSet, Object postItem, Activity knownActivity) {
+        if (configurationSet == null) return false;
+        Object stackInstance = EnhanceReflection.readField(configurationSet, "stackInstance");
+        Object postContextMenu = EnhanceReflection.readField(stackInstance, "postContextMenu");
+        Object dialogObject = EnhanceReflection.readField(postContextMenu, "second");
+        if (!(dialogObject instanceof AlertDialog)) return false;
+        AlertDialog dialog = (AlertDialog) dialogObject;
+        if (!dialog.isShowing()) return false;
+        String boardName = castString(postItem != null ? EnhanceReflection.invokeNoArgs(postItem, "getBoardName") : null);
+        Integer postNumber =
+                postItem != null ? parsePostNumber(EnhanceReflection.invokeNoArgs(postItem, "getPostNumber")) : null;
+        if (postNumber == null) {
+            postNumber = parsePostNumber(EnhanceReflection.readField(postContextMenu, "first"));
+        }
+        Activity activity = knownActivity != null ? knownActivity : resolveActivity(dialog, configurationSet);
+        if ((boardName == null || boardName.isEmpty()) && activity != null) {
+            boardName = EnhanceReflection.resolveActiveBoardName(activity);
+        }
+        if (postNumber == null || postNumber <= 0 || boardName == null || boardName.isEmpty()) return false;
+        String postKey = buildPostKey(boardName, postNumber);
+        List<EnhanceWidget> widgets = contextMenuWidgetsByPostKey.get(postKey);
+        if (widgets == null || widgets.isEmpty()) return false;
+        if (activity == null || activity.isFinishing() || EnhanceReflection.isActivityDestroyed(activity)) return false;
+        return attachContextMenuWidgetsView(activity, dialog, widgets);
+    }
+
+    private static void scheduleContextMenuAttachRetry(
+            View decorView, Object configurationSet, Object postItem, int retriesLeft) {
+        if (retriesLeft <= 0 || decorView == null) return;
+        decorView.postDelayed(
+                () -> {
+                    if (!maybeAttachContextMenuWidgetsFromConfigurationSet(configurationSet, postItem, null)) {
+                        scheduleContextMenuAttachRetry(decorView, configurationSet, postItem, retriesLeft - 1);
+                    }
+                },
+                16L);
+    }
+
+    private static void scheduleAttachToKnownDialog(
+            View decorView,
+            Activity activity,
+            AlertDialog dialog,
+            List<EnhanceWidget> widgets,
+            int retriesLeft) {
+        if (retriesLeft <= 0 || decorView == null) return;
+        decorView.postDelayed(
+                () -> {
+                    if (!attachContextMenuWidgetsView(activity, dialog, widgets)) {
+                        scheduleAttachToKnownDialog(decorView, activity, dialog, widgets, retriesLeft - 1);
+                    }
+                },
+                16L);
+    }
+
+    private static boolean attachContextMenuWidgetsView(Activity activity, AlertDialog dialog, List<EnhanceWidget> widgets) {
+        ViewGroup custom = findContextMenuContainer(dialog);
+        if (custom == null) {
+            return false;
+        }
+        LinearLayout wrapper = ensureContextMenuWrapper(dialog, custom);
+        if (wrapper == null) {
+            return false;
+        }
+        LinearLayout extensionRoot = ensureContextMenuExtensionRoot(activity, wrapper);
+        if (extensionRoot == null) {
+            return false;
+        }
+        extensionRoot.removeAllViews();
+        extensionRoot.setTag(
+                TAG_CONTEXT_MENU_CLOSE_ACTION,
+                (Runnable) () -> {
+                    if (dialog.isShowing()) {
+                        dialog.dismiss();
+                    }
+                });
+        for (int i = 0; i < widgets.size(); i++) {
+            EnhanceWidget widget = widgets.get(i);
+            widget.inject(activity, extensionRoot);
+            View container = extensionRoot.findViewWithTag(widget.getContainerTag());
+            if (container != null && container.getParent() == extensionRoot) {
+                container.setLayoutParams(widget.createLayoutParams(activity));
+            }
+        }
+        return extensionRoot.getChildCount() > 0;
+    }
+
+    private static ViewGroup findContextMenuContainer(AlertDialog dialog) {
+        View custom = dialog.findViewById(android.R.id.custom);
+        if (custom instanceof ViewGroup) return (ViewGroup) custom;
+        View content = dialog.findViewById(android.R.id.content);
+        return content instanceof ViewGroup ? (ViewGroup) content : null;
+    }
+
+    private static LinearLayout ensureContextMenuWrapper(AlertDialog dialog, ViewGroup customContainer) {
+        if (customContainer.getChildCount() == 1
+                && customContainer.getChildAt(0) instanceof LinearLayout
+                && CONTEXT_MENU_WRAPPER_TAG.equals(customContainer.getChildAt(0).getTag())) {
+            return (LinearLayout) customContainer.getChildAt(0);
+        }
+        if (customContainer.getChildCount() <= 0) return null;
+        ArrayList<View> children = new ArrayList<>(customContainer.getChildCount());
+        while (customContainer.getChildCount() > 0) {
+            View child = customContainer.getChildAt(0);
+            customContainer.removeViewAt(0);
+            children.add(child);
+        }
+        LinearLayout wrapper = new LinearLayout(dialog.getContext());
+        wrapper.setTag(CONTEXT_MENU_WRAPPER_TAG);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        for (int i = 0; i < children.size(); i++) {
+            wrapper.addView(
+                    children.get(i),
+                    new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        customContainer.addView(wrapper);
+        return wrapper;
+    }
+
+    private static LinearLayout ensureContextMenuExtensionRoot(Activity activity, LinearLayout wrapper) {
+        View existing = wrapper.findViewWithTag(CONTEXT_MENU_EXTENSION_ROOT_TAG);
+        if (existing instanceof LinearLayout) {
+            return (LinearLayout) existing;
+        }
+        LinearLayout extensionRoot = new LinearLayout(activity);
+        extensionRoot.setTag(CONTEXT_MENU_EXTENSION_ROOT_TAG);
+        extensionRoot.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams layoutParams =
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        int horizontal = dp(activity, 16);
+        layoutParams.leftMargin = horizontal;
+        layoutParams.topMargin = dp(activity, 8);
+        layoutParams.rightMargin = horizontal;
+        layoutParams.bottomMargin = dp(activity, 10);
+        wrapper.addView(extensionRoot, layoutParams);
+        return extensionRoot;
+    }
+
+    private static Activity resolveActivity(AlertDialog dialog, Object configurationSet) {
+        Activity ownerActivity = dialog.getOwnerActivity();
+        if (ownerActivity != null) {
+            return ownerActivity;
+        }
+        return resolveActivityFromConfigurationSet(configurationSet);
+    }
+
+    private static Activity resolveActivityFromConfigurationSet(Object configurationSet) {
+        Object fragmentManager = EnhanceReflection.readField(configurationSet, "fragmentManager");
+        Object fragments = EnhanceReflection.invokeNoArgs(fragmentManager, "getFragments");
+        if (fragments instanceof List) {
+            List<?> list = (List<?>) fragments;
+            for (int i = 0; i < list.size(); i++) {
+                Object fragment = list.get(i);
+                Object fragmentActivity = EnhanceReflection.invokeNoArgs(fragment, "getActivity");
+                if (fragmentActivity instanceof Activity) {
+                    return (Activity) fragmentActivity;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String resolveBoardNameForContextMenu(
+            Object configurationSet, Object postNumberObject, Activity activity) {
+        Object postsProvider = EnhanceReflection.readField(configurationSet, "postsProvider");
+        if (postsProvider != null && postNumberObject != null) {
+            Object postItem =
+                    EnhanceReflection.invoke(postsProvider, "findPostItem", new Class<?>[] {postNumberObject.getClass()}, postNumberObject);
+            String boardName = castString(EnhanceReflection.invokeNoArgs(postItem, "getBoardName"));
+            boardName = nullIfEmpty(boardName);
+            if (boardName != null) return boardName;
+        }
+        return nullIfEmpty(EnhanceReflection.resolveActiveBoardName(activity));
+    }
+
+    private static void ensureInteractionHookInstalled(Activity activity, Object adapter) {
+        Object uiManager = EnhanceReflection.readField(adapter, "uiManager");
+        if (uiManager == null) return;
+        Object interaction = EnhanceReflection.invokeNoArgs(uiManager, "interaction");
+        if (interaction == null) return;
+        if (wrappedInteractionsByUiManager.get(uiManager) == interaction) return;
+        if (isAlreadyWrappedAdapter(interaction)) {
+            wrappedInteractionsByUiManager.put(uiManager, interaction);
+            return;
+        }
+        try {
+            Object wrappedInteraction = wrapInteractionUnit(activity, interaction, uiManager);
+            if (!writeField(uiManager, "interactionUnit", wrappedInteraction)) return;
+            wrappedInteractionsByUiManager.put(uiManager, wrappedInteraction);
+        } catch (Throwable ignored) {
+            Log.w(TAG, "ensureInteractionHookInstalled: failed", ignored);
+        }
+    }
+
+    private static void ensureDialogHookInstalled(Activity activity, Object adapter) {
+        Object uiManager = EnhanceReflection.readField(adapter, "uiManager");
+        if (uiManager == null) return;
+        Object dialogUnit = EnhanceReflection.invokeNoArgs(uiManager, "dialog");
+        if (dialogUnit == null) return;
+        if (wrappedDialogsByUiManager.get(uiManager) == dialogUnit) return;
+        if (isAlreadyWrappedAdapter(dialogUnit)) {
+            wrappedDialogsByUiManager.put(uiManager, dialogUnit);
+            return;
+        }
+        try {
+            Object wrappedDialogUnit = wrapDialogUnit(activity, dialogUnit, uiManager);
+            if (!writeField(uiManager, "dialogUnit", wrappedDialogUnit)) return;
+            wrappedDialogsByUiManager.put(uiManager, wrappedDialogUnit);
+        } catch (Throwable ignored) {
+            Log.w(TAG, "ensureDialogHookInstalled: failed", ignored);
+        }
+    }
+
+    private static Object wrapInteractionUnit(Activity activity, Object interaction, Object uiManager) {
+        prepareProxyCache(activity);
+        Class<?> proxyBuilderClass = resolveProxyBuilderClass();
+        try {
+            Object builder = proxyBuilderClass.getMethod("forClass", Class.class).invoke(null, interaction.getClass());
+            Method dexCache = builder.getClass().getMethod("dexCache", File.class);
+            builder = dexCache.invoke(builder, activity.getDir(PROXY_CACHE_DIR, Context.MODE_PRIVATE));
+            Method callSuper = proxyBuilderClass.getMethod("callSuper", Object.class, Method.class, Object[].class);
+            builder = builder.getClass()
+                    .getMethod("handler", InvocationHandler.class)
+                    .invoke(builder, createInteractionInvocationHandler(callSuper));
+            Constructor<?> constructor = resolveInteractionConstructor(interaction.getClass(), uiManager);
+            builder = builder.getClass()
+                    .getMethod("constructorArgTypes", Class[].class)
+                    .invoke(builder, new Object[] {constructor.getParameterTypes()});
+            builder = builder.getClass()
+                    .getMethod("constructorArgValues", Object[].class)
+                    .invoke(builder, new Object[] {new Object[] {uiManager}});
+            Object wrappedInteraction = builder.getClass().getMethod("build").invoke(builder);
+            if (wrappedInteraction == null || wrappedInteraction == interaction) {
+                throw new IllegalStateException("InteractionUnit wrapping returned original instance");
+            }
+            return wrappedInteraction;
+        } catch (Throwable t) {
+            throw new IllegalStateException("Unable to wrap InteractionUnit", t);
+        }
+    }
+
+    private static Object wrapDialogUnit(Activity activity, Object dialogUnit, Object uiManager) {
+        prepareProxyCache(activity);
+        Class<?> proxyBuilderClass = resolveProxyBuilderClass();
+        try {
+            Object builder = proxyBuilderClass.getMethod("forClass", Class.class).invoke(null, dialogUnit.getClass());
+            Method dexCache = builder.getClass().getMethod("dexCache", File.class);
+            builder = dexCache.invoke(builder, activity.getDir(PROXY_CACHE_DIR, Context.MODE_PRIVATE));
+            Method callSuper = proxyBuilderClass.getMethod("callSuper", Object.class, Method.class, Object[].class);
+            builder = builder.getClass()
+                    .getMethod("handler", InvocationHandler.class)
+                    .invoke(builder, createDialogInvocationHandler(callSuper));
+            Constructor<?> constructor = resolveDialogConstructor(dialogUnit.getClass(), uiManager);
+            builder = builder.getClass()
+                    .getMethod("constructorArgTypes", Class[].class)
+                    .invoke(builder, new Object[] {constructor.getParameterTypes()});
+            builder = builder.getClass()
+                    .getMethod("constructorArgValues", Object[].class)
+                    .invoke(builder, new Object[] {new Object[] {uiManager}});
+            Object wrappedDialogUnit = builder.getClass().getMethod("build").invoke(builder);
+            if (wrappedDialogUnit == null || wrappedDialogUnit == dialogUnit) {
+                throw new IllegalStateException("DialogUnit wrapping returned original instance");
+            }
+            return wrappedDialogUnit;
+        } catch (Throwable t) {
+            throw new IllegalStateException("Unable to wrap DialogUnit", t);
+        }
+    }
+
+    private static Constructor<?> resolveInteractionConstructor(Class<?> interactionClass, Object uiManager)
+            throws NoSuchMethodException {
+        Constructor<?>[] constructors = interactionClass.getDeclaredConstructors();
+        for (int i = 0; i < constructors.length; i++) {
+            Constructor<?> constructor = constructors[i];
+            Class<?>[] parameterTypes = constructor.getParameterTypes();
+            if (parameterTypes.length == 1 && parameterTypes[0].isInstance(uiManager)) {
+                constructor.setAccessible(true);
+                return constructor;
+            }
+        }
+        throw new NoSuchMethodException("No matching InteractionUnit constructor");
+    }
+
+    private static Constructor<?> resolveDialogConstructor(Class<?> dialogClass, Object uiManager)
+            throws NoSuchMethodException {
+        Constructor<?>[] constructors = dialogClass.getDeclaredConstructors();
+        for (int i = 0; i < constructors.length; i++) {
+            Constructor<?> constructor = constructors[i];
+            Class<?>[] parameterTypes = constructor.getParameterTypes();
+            if (parameterTypes.length == 1 && parameterTypes[0].isInstance(uiManager)) {
+                constructor.setAccessible(true);
+                return constructor;
+            }
+        }
+        throw new NoSuchMethodException("No matching DialogUnit constructor");
+    }
+
+    private static InvocationHandler createInteractionInvocationHandler(Method callSuper) {
+        return (proxy, method, args) -> {
+            Object result = callSuper.invoke(null, proxy, method, args);
+            if ("handlePostContextMenu".equals(method.getName()) && args != null && args.length >= 2) {
+                Object configurationSet = args[0];
+                Object postItem = args[1];
+                contextHandlePostLongClick(configurationSet, postItem);
+            }
+            return result;
+        };
+    }
+
+    private static InvocationHandler createDialogInvocationHandler(Method callSuper) {
+        return (proxy, method, args) -> {
+            Object result = callSuper.invoke(null, proxy, method, args);
+            if ("handlePostContextMenu".equals(method.getName()) && args != null && args.length >= 4) {
+                boolean show = args[2] instanceof Boolean && (Boolean) args[2];
+                if (show && args[3] instanceof AlertDialog) {
+                    Object configurationSet = args[0];
+                    Object postNumber = args[1];
+                    AlertDialog dialog = (AlertDialog) args[3];
+                    Log.d(TAG, "dialogHook:handlePostContextMenu show=true post=" + postNumber);
+                    contextHandlePostContextMenuDialog(configurationSet, postNumber, dialog, null);
+                }
+            }
+            return result;
+        };
+    }
+
     private static Object wrapAndInstall(Activity activity, ViewGroup collectionView, Object adapter) {
         Object wrappedAdapter = wrapAdapter(activity, collectionView, adapter);
         try {
@@ -296,9 +718,9 @@ public final class HookPost implements EnhanceHook {
             ViewGroup postRoot = (ViewGroup) itemView;
             if ("onBindViewHolder".equals(name)) {
                 int position = args.length > 1 && args[1] instanceof Integer ? (Integer) args[1] : -1;
-                bindWidgets(activity, collectionView, postRoot, position);
+                inlineHandleOnBind(activity, collectionView, postRoot, position);
             } else {
-                clearRoot(postRoot);
+                inlineHandleOnRecycle(postRoot);
             }
             return result;
         };
@@ -337,7 +759,12 @@ public final class HookPost implements EnhanceHook {
         HashMap<String, Object> values = new HashMap<>();
         values.put("collectionView", collectionView);
         Object configurationSet = EnhanceReflection.readField(adapter, "configurationSet");
-        values.put("callback", EnhanceReflection.readField(configurationSet, "clickCallback"));
+        values.put(
+                "callback",
+                wrapPostClickCallback(
+                        collectionView.getClass().getClassLoader(),
+                        EnhanceReflection.readField(configurationSet, "clickCallback"),
+                        collectionView));
         Object chanName = EnhanceReflection.readField(configurationSet, "chanName");
         values.put("chanName", chanName instanceof String ? chanName : null);
         values.put("uiManager", EnhanceReflection.readField(adapter, "uiManager"));
@@ -347,6 +774,72 @@ public final class HookPost implements EnhanceHook {
         values.put("postItemsMap", EnhanceReflection.readField(adapter, "postItemsMap"));
         values.put("hiddenPosts", EnhanceReflection.readField(adapter, "hiddenPosts"));
         return values;
+    }
+
+    private static Object wrapPostClickCallback(ClassLoader classLoader, Object callback, ViewGroup collectionView) {
+        if (callback == null || Proxy.isProxyClass(callback.getClass())) return callback;
+        try {
+            Class<?> callbackClass = Class.forName(
+                    "com.mishiranu.dashchan.ui.navigator.adapter.PostsAdapter$Callback", false, classLoader);
+            if (!callbackClass.isInstance(callback)) return callback;
+            return Proxy.newProxyInstance(
+                    classLoader,
+                    new Class<?>[] {callbackClass},
+                    (proxy, method, args) -> {
+                        Object result = method.invoke(callback, args);
+                        String methodName = method.getName();
+                        boolean handled = result instanceof Boolean && (Boolean) result;
+                        boolean isDirectLongClick = "onItemLongClick".equals(methodName);
+                        boolean isLongClickViaOnItemClick = "onItemClick".equals(methodName)
+                                && args != null
+                                && args.length >= 4
+                                && args[3] instanceof Boolean
+                                && (Boolean) args[3];
+                        if (handled && (isDirectLongClick || isLongClickViaOnItemClick)) {
+                            Object postItem;
+                            if (isDirectLongClick) {
+                                postItem = args != null && args.length > 0 ? args[0] : null;
+                            } else {
+                                postItem = args[2];
+                            }
+                            Object configurationSet = resolveConfigurationSetFromAdapter(collectionView);
+                            contextHandlePostLongClick(configurationSet, postItem);
+                        }
+                        return result;
+                    });
+        } catch (Throwable t) {
+            return callback;
+        }
+    }
+
+    private static Object resolveConfigurationSetFromAdapter(ViewGroup collectionView) {
+        Object adapter = EnhanceReflection.invokeNoArgs(collectionView, "getAdapter");
+        return resolveConfigurationSetFromAdapter(adapter);
+    }
+
+    private static Object resolveConfigurationSetFromAdapter(Object adapter) {
+        if (adapter == null) return null;
+        Object configurationSet = EnhanceReflection.readField(adapter, "configurationSet");
+        if (configurationSet != null) return configurationSet;
+        return EnhanceReflection.invokeNoArgs(adapter, "getConfigurationSet");
+    }
+
+    private static boolean writeField(Object target, String fieldName, Object value) {
+        if (target == null || fieldName == null) return false;
+        Class<?> current = target.getClass();
+        while (current != null) {
+            try {
+                Field field = current.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                field.set(target, value);
+                return true;
+            } catch (NoSuchFieldException e) {
+                current = current.getSuperclass();
+            } catch (Throwable t) {
+                return false;
+            }
+        }
+        return false;
     }
 
     private static void reinstallPostDecorations(Activity activity, ViewGroup collectionView, Object adapter) {
@@ -800,6 +1293,10 @@ public final class HookPost implements EnhanceHook {
         if (value == null) return null;
         value = value.trim();
         return value.isEmpty() ? null : value;
+    }
+
+    private static int dp(Activity activity, int value) {
+        return Math.round(value * activity.getResources().getDisplayMetrics().density);
     }
 
     private static Class<?> resolveProxyBuilderClass() {
