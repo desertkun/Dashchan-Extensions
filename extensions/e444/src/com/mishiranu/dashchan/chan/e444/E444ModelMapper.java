@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class E444ModelMapper {
     private static final String TAG = "E444ModelMapper";
@@ -276,9 +275,13 @@ public class E444ModelMapper {
         HookPost.setWidgetsForPost(boardName, postNumber, widgetsForPost);
 
         ArrayList<EnhanceWidget> widgetsForContextMenu = new ArrayList<>();
-        List<String> contextMenuReactionIcons = WidgetReaction.getBoardReactionIcons(boardName).stream()
-                .filter(iconName -> !StringUtils.isEmpty(iconName))
-                .collect(Collectors.toList());
+        List<String> boardReactionIcons = WidgetReaction.getBoardReactionIcons(boardName);
+        ArrayList<String> contextMenuReactionIcons = new ArrayList<>(boardReactionIcons.size());
+        for (String iconName : boardReactionIcons) {
+            if (!StringUtils.isEmpty(iconName)) {
+                contextMenuReactionIcons.add(iconName);
+            }
+        }
         if (!contextMenuReactionIcons.isEmpty()) {
             WidgetReactionsContextMenu widget = new WidgetReactionsContextMenu(locator, contextMenuReactionIcons);
             widget.setPostContext(boardName, postNumber);

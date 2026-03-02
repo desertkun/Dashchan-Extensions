@@ -1,11 +1,13 @@
 package com.mishiranu.dashchan.chan.e444.enhance.widgets;
 
 import android.app.Activity;
+import android.graphics.Rect;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import com.google.android.flexbox.AlignItems;
 import com.google.android.flexbox.FlexDirection;
@@ -23,6 +25,7 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
     private static final int TAG_REACTION_ITEM = 0xE4442201;
     private static final int ICON_SIZE_DP = WidgetReaction.DEFAULT_ICON_SIZE_DP * 2;
     private static final int CELL_WIDTH_DP = 48;
+    private static final float MAX_SCROLL_HEIGHT_FRACTION = 0.45f;
     private final List<WidgetReaction> reactions;
 
     public WidgetReactionsContextMenu(E444ChanLocator locator, List<String> iconNames) {
@@ -59,10 +62,13 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
         Runnable onReactionClick = closeAction instanceof Runnable ? (Runnable) closeAction : null;
         LinearLayout container = obtainOrCreateContainer(activity, postRoot);
         container.removeAllViews();
-        FlexboxLayout flexbox = createFlexbox(activity);
+        ScrollView scrollView = createScrollView(activity);
         container.addView(
-                flexbox,
+                scrollView,
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        FlexboxLayout flexbox = createFlexbox(activity);
+        scrollView.addView(flexbox, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         Runnable refreshSelectionState = () -> applyReactionSelectionState(activity, flexbox);
         for (WidgetReaction reaction : reactions) {
             TextView reactionView = createReactionView(activity);
@@ -70,6 +76,7 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
             bindReactionView(activity, reactionView, reaction, onReactionClick, refreshSelectionState);
         }
         applyReactionSelectionState(activity, flexbox);
+        applyMaxScrollHeight(activity, scrollView, flexbox);
     }
 
     private static LinearLayout obtainOrCreateContainer(Activity activity, ViewGroup postRoot) {
@@ -80,7 +87,7 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
         LinearLayout container = new LinearLayout(activity);
         container.setTag(CONTAINER_TAG);
         container.setOrientation(LinearLayout.VERTICAL);
-        container.setGravity(Gravity.START);
+        container.setGravity(Gravity.CENTER_HORIZONTAL);
         container.setClickable(false);
         container.setFocusable(false);
         postRoot.addView(container);
@@ -91,9 +98,19 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
         FlexboxLayout flexbox = new FlexboxLayout(activity);
         flexbox.setFlexDirection(FlexDirection.ROW);
         flexbox.setFlexWrap(FlexWrap.WRAP);
-        flexbox.setJustifyContent(JustifyContent.FLEX_START);
-        flexbox.setAlignItems(AlignItems.STRETCH);
+        flexbox.setJustifyContent(JustifyContent.CENTER);
+        flexbox.setAlignItems(AlignItems.CENTER);
         return flexbox;
+    }
+
+    private static ScrollView createScrollView(Activity activity) {
+        ScrollView scrollView = new ScrollView(activity);
+        scrollView.setFillViewport(true);
+        scrollView.setVerticalScrollBarEnabled(true);
+        scrollView.setHorizontalScrollBarEnabled(false);
+        scrollView.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        scrollView.setPadding(0, 0, 0, dp(activity, 8));
+        return scrollView;
     }
 
     private static TextView createReactionView(Activity activity) {
@@ -103,8 +120,10 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
     private static FlexboxLayout.LayoutParams createReactionLayoutParams(Activity activity) {
         FlexboxLayout.LayoutParams layoutParams =
                 new FlexboxLayout.LayoutParams(dp(activity, CELL_WIDTH_DP), ViewGroup.LayoutParams.WRAP_CONTENT);
-        layoutParams.setFlexGrow(1f);
+        layoutParams.setFlexGrow(0f);
         layoutParams.setFlexShrink(0f);
+        layoutParams.leftMargin = dp(activity, 2);
+        layoutParams.rightMargin = dp(activity, 2);
         layoutParams.bottomMargin = dp(activity, 2);
         return layoutParams;
     }
@@ -152,6 +171,35 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
 
     private static void applyReactionViewState(Activity activity, TextView reactionView, WidgetReaction reaction) {
         reactionView.setSelected(reaction.isSelected(activity.getApplicationContext()));
+    }
+
+    private static void applyMaxScrollHeight(Activity activity, ScrollView scrollView, FlexboxLayout flexbox) {
+        final int displayHeight = activity.getResources().getDisplayMetrics().heightPixels;
+        final int preferredMaxHeight =
+                Math.max(dp(activity, 96), Math.round(displayHeight * MAX_SCROLL_HEIGHT_FRACTION));
+        scrollView.post(new Runnable() {
+            @Override
+            public void run() {
+                Rect visibleFrame = new Rect();
+                scrollView.getWindowVisibleDisplayFrame(visibleFrame);
+                int[] location = new int[2];
+                scrollView.getLocationOnScreen(location);
+                int availableVisibleHeight = visibleFrame.bottom - location[1] - dp(activity, 20);
+                int maxHeight = availableVisibleHeight > 0
+                        ? Math.max(dp(activity, 72), Math.min(preferredMaxHeight, availableVisibleHeight))
+                        : preferredMaxHeight;
+                int contentHeight = flexbox.getMeasuredHeight();
+                ViewGroup.LayoutParams layoutParams = scrollView.getLayoutParams();
+                if (layoutParams == null) {
+                    return;
+                }
+                int targetHeight = contentHeight > maxHeight ? maxHeight : ViewGroup.LayoutParams.WRAP_CONTENT;
+                if (layoutParams.height != targetHeight) {
+                    layoutParams.height = targetHeight;
+                    scrollView.setLayoutParams(layoutParams);
+                }
+            }
+        });
     }
 
     private static int dp(Activity activity, int value) {

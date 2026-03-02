@@ -9,7 +9,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
 
 public interface EnhanceTask<Result> {
     Result run(E444ChanLocator locator, HttpRequest.Preset preset) throws Exception;
@@ -24,7 +23,10 @@ final class Task {
     private Task() {}
 
     static <Result> void submit(
-            E444ChanLocator locator, EnhanceTask<Result> task, Consumer<Result> onSuccess, Consumer<Throwable> onError) {
+            E444ChanLocator locator,
+            EnhanceTask<Result> task,
+            TaskCallback<Result> onSuccess,
+            TaskCallback<Throwable> onError) {
         DASHCHAN_EXECUTOR.execute(() -> {
             try {
                 ClassLoader classLoader = locator.getClass().getClassLoader();

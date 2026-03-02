@@ -9,12 +9,15 @@ import android.graphics.drawable.Drawable;
 import android.util.TypedValue;
 import android.widget.TextView;
 import android.widget.Toast;
+import chan.content.model.Post;
 import chan.text.JsonSerial;
 import chan.text.ParseException;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceReflection;
+import com.mishiranu.dashchan.chan.e444.enhance.TaskCallback;
 import com.mishiranu.dashchan.chan.e444.enhance.tasks.TaskReadIcon;
+import com.mishiranu.dashchan.chan.e444.enhance.tasks.TaskReadPost;
 import com.mishiranu.dashchan.chan.e444.enhance.tasks.TaskSendReaction;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
@@ -150,11 +153,14 @@ public final class WidgetReaction {
             Runnable onReactionClick,
             Runnable onReactionSentSuccess,
             Runnable onSelectionChanged) {
-        reactionView.setOnClickListener(v -> {
-            if (onReactionClick != null) {
-                onReactionClick.run();
+        reactionView.setOnClickListener(new android.view.View.OnClickListener() {
+            @Override
+            public void onClick(android.view.View view) {
+                if (onReactionClick != null) {
+                    onReactionClick.run();
+                }
+                sendReaction(activity, reactionView, mode, onReactionSentSuccess, onSelectionChanged);
             }
-            sendReaction(activity, reactionView, mode, onReactionSentSuccess, onSelectionChanged);
         });
     }
 
@@ -174,24 +180,48 @@ public final class WidgetReaction {
         EnhanceReflection.submitTask(
                 locator,
                 new TaskSendReaction(targetBoardName, targetPostNumber, iconName),
-                result -> {
-                    ensureToggledReactionsLoaded(activity.getApplicationContext());
-                    if (postStateKey != null) {
-                        updateReactionSelection(mode);
-                        persistToggledReactions(activity.getApplicationContext());
+                new TaskCallback<Void>() {
+                    @Override
+                    public void accept(Void result) {
+                        ensureToggledReactionsLoaded(activity.getApplicationContext());
+                        if (postStateKey != null) {
+                            updateReactionSelection(mode);
+                            persistToggledReactions(activity.getApplicationContext());
+                        }
+                        if (onSelectionChanged != null) {
+                            onSelectionChanged.run();
+                        }
+                        if (onReactionSentSuccess != null) {
+                            onReactionSentSuccess.run();
+                        }
+                        reactionView.setEnabled(true);
+                        refreshPostAfterReaction(activity, targetBoardName, targetPostNumber);
                     }
-                    if (onSelectionChanged != null) {
-                        onSelectionChanged.run();
-                    }
-                    if (onReactionSentSuccess != null) {
-                        onReactionSentSuccess.run();
-                    }
-                    reactionView.setEnabled(true);
-                    EnhanceReflection.requestThreadPostRebind(activity, targetBoardName, targetPostNumber);
                 },
-                throwable -> {
-                    reactionView.setEnabled(true);
-                    EnhanceReflection.showError(throwable);
+                new TaskCallback<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) {
+                        reactionView.setEnabled(true);
+                        EnhanceReflection.showError(throwable);
+                    }
+                });
+    }
+
+    private void refreshPostAfterReaction(Activity activity, String targetBoardName, int targetPostNumber) {
+        EnhanceReflection.submitTask(
+                locator,
+                new TaskReadPost(targetBoardName, targetPostNumber),
+                new TaskCallback<Post>() {
+                    @Override
+                    public void accept(Post post) {
+                        EnhanceReflection.requestThreadPostRebind(activity, targetBoardName, targetPostNumber);
+                    }
+                },
+                new TaskCallback<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) {
+                        EnhanceReflection.requestThreadPostRebind(activity, targetBoardName, targetPostNumber);
+                    }
                 });
     }
 
@@ -212,21 +242,36 @@ public final class WidgetReaction {
     }
 
     private void requestIconLoad(TextView reactionView) {
-        ICON_WAITERS
-                .computeIfAbsent(
-                        iconName, key -> Collections.synchronizedList(new ArrayList<WeakReference<TextView>>()))
-                .add(new WeakReference<>(reactionView));
+        List<WeakReference<TextView>> waiters = ICON_WAITERS.get(iconName);
+        if (waiters == null) {
+            synchronized (ICON_WAITERS) {
+                waiters = ICON_WAITERS.get(iconName);
+                if (waiters == null) {
+                    waiters = Collections.synchronizedList(new ArrayList<WeakReference<TextView>>());
+                    ICON_WAITERS.put(iconName, waiters);
+                }
+            }
+        }
+        waiters.add(new WeakReference<>(reactionView));
         if (!ICON_LOADING.add(iconName)) {
             return;
         }
         EnhanceReflection.submitTask(
                 locator,
                 new TaskReadIcon(iconName),
-                bitmap -> {
-                    ICON_BITMAPS.put(iconName, bitmap);
-                    deliverLoadedIcon(iconName, bitmap);
+                new TaskCallback<Bitmap>() {
+                    @Override
+                    public void accept(Bitmap bitmap) {
+                        ICON_BITMAPS.put(iconName, bitmap);
+                        deliverLoadedIcon(iconName, bitmap);
+                    }
                 },
-                throwable -> deliverLoadedIcon(iconName, null));
+                new TaskCallback<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) {
+                        deliverLoadedIcon(iconName, null);
+                    }
+                });
     }
 
     private static void deliverLoadedIcon(String iconName, Bitmap bitmap) {

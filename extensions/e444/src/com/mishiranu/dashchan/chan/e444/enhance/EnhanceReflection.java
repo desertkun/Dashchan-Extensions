@@ -14,7 +14,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Consumer;
 
 public final class EnhanceReflection {
     private static final String TAG = "EnhanceReflection";
@@ -197,15 +196,20 @@ public final class EnhanceReflection {
     }
 
     public static <Result> void submitTask(
-            E444ChanLocator locator, EnhanceTask<Result> task, Consumer<Result> onSuccess) {
-        submitTask(locator, task, onSuccess, EnhanceReflection::showError);
+            E444ChanLocator locator, EnhanceTask<Result> task, TaskCallback<Result> onSuccess) {
+        submitTask(locator, task, onSuccess, new TaskCallback<Throwable>() {
+            @Override
+            public void accept(Throwable throwable) {
+                showError(throwable);
+            }
+        });
     }
 
     public static <Result> void submitTask(
             E444ChanLocator locator,
             EnhanceTask<Result> task,
-            Consumer<Result> onSuccess,
-            Consumer<Throwable> onError) {
+            TaskCallback<Result> onSuccess,
+            TaskCallback<Throwable> onError) {
         Task.submit(locator, task, onSuccess, onError);
     }
 

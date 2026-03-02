@@ -178,8 +178,10 @@ public final class HookPost implements EnhanceHook {
         if (!(boardValue instanceof String) || !(major instanceof Number)) return;
         int number = ((Number) major).intValue();
         if (number <= 0) return;
-        List<EnhanceWidget> widgets =
-                widgetsByPostKey.getOrDefault(buildPostKey((String) boardValue, number), Collections.emptyList());
+        List<EnhanceWidget> widgets = widgetsByPostKey.get(buildPostKey((String) boardValue, number));
+        if (widgets == null) {
+            widgets = Collections.emptyList();
+        }
         for (int i = 0; i < widgets.size(); i++) {
             EnhanceWidget widget = widgets.get(i);
             widget.inject(activity, root);
@@ -427,8 +429,10 @@ public final class HookPost implements EnhanceHook {
         }
         if (customContainer.getChildCount() <= 0) return null;
         ArrayList<View> children = new ArrayList<>(customContainer.getChildCount());
+        ArrayList<ViewGroup.LayoutParams> childLayoutParams = new ArrayList<>(customContainer.getChildCount());
         while (customContainer.getChildCount() > 0) {
             View child = customContainer.getChildAt(0);
+            childLayoutParams.add(child.getLayoutParams());
             customContainer.removeViewAt(0);
             children.add(child);
         }
@@ -436,12 +440,23 @@ public final class HookPost implements EnhanceHook {
         wrapper.setTag(CONTEXT_MENU_WRAPPER_TAG);
         wrapper.setOrientation(LinearLayout.VERTICAL);
         for (int i = 0; i < children.size(); i++) {
-            wrapper.addView(
-                    children.get(i),
-                    new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            wrapper.addView(children.get(i), toLinearLayoutParams(childLayoutParams.get(i)));
         }
         customContainer.addView(wrapper);
         return wrapper;
+    }
+
+    private static LinearLayout.LayoutParams toLinearLayoutParams(ViewGroup.LayoutParams layoutParams) {
+        if (layoutParams instanceof LinearLayout.LayoutParams) {
+            return new LinearLayout.LayoutParams((LinearLayout.LayoutParams) layoutParams);
+        }
+        if (layoutParams instanceof ViewGroup.MarginLayoutParams) {
+            return new LinearLayout.LayoutParams((ViewGroup.MarginLayoutParams) layoutParams);
+        }
+        if (layoutParams != null) {
+            return new LinearLayout.LayoutParams(layoutParams.width, layoutParams.height);
+        }
+        return new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
     private static LinearLayout ensureContextMenuExtensionRoot(Activity activity, LinearLayout wrapper) {

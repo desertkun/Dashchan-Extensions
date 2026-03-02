@@ -8,8 +8,9 @@ chan {
 }
 
 dependencies {
-	implementation 'org.web3j:abi:4.8.9'
 	implementation 'com.google.android.flexbox:flexbox:3.0.0'
+	implementation 'com.linkedin.dexmaker:dexmaker:2.28.3'
+	implementation 'org.bouncycastle:bcprov-jdk15on:1.68'
 	compileOnly 'org.projectlombok:lombok:1.18.38'
 	annotationProcessor 'org.projectlombok:lombok:1.18.38'
 }

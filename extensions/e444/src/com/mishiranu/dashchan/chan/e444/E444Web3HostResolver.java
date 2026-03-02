@@ -6,6 +6,7 @@ import chan.http.HttpRequest;
 import chan.http.SimpleEntity;
 import chan.util.StringUtils;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -17,24 +18,21 @@ import org.bouncycastle.jcajce.provider.digest.Keccak;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.web3j.abi.FunctionEncoder;
-import org.web3j.abi.FunctionReturnDecoder;
-import org.web3j.abi.TypeReference;
-import org.web3j.abi.datatypes.Function;
-import org.web3j.abi.datatypes.Type;
-import org.web3j.abi.datatypes.Utf8String;
-import org.web3j.abi.datatypes.generated.Uint256;
 
 final class E444Web3HostResolver {
     private static final String WEB3_DOMAIN = "ech.u";
     private static final String RECORD_DNS_A = "dns.A";
+    private static final String FUNCTION_SIGNATURE_GET = "get(string,uint256)";
+    private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
+    private static final byte[] FUNCTION_SELECTOR_GET =
+            Arrays.copyOf(sha3(FUNCTION_SIGNATURE_GET.getBytes(StandardCharsets.US_ASCII)), 4);
 
     private static final String UNS_PROXY = "0xF6c1b83977DE3dEffC476f5048A0a84d3375d498";
 
     private static final Uri[] BASE_RPC_URIS = {
-        Uri.parse("https://mainnet.base.org"),
-        Uri.parse("https://base-rpc.publicnode.com"),
-        Uri.parse("https://base.llamarpc.com")
+        Uri.parse("https://base.rpc.blxrbdn.com"),
+        Uri.parse("https://api.zan.top/base-mainnet"),
+        Uri.parse("https://base.api.pocket.network")
     };
 
     private static final long CACHE_MAX_AGE = 5L * 60L * 1000L;
@@ -104,7 +102,7 @@ final class E444Web3HostResolver {
     }
 
     private static List<String> resolveHostsViaRpc(HttpRequest.Preset preset, Uri rpcUri) throws HttpException {
-        Uint256 tokenId = new Uint256(new BigInteger(1, calculateNamehash(WEB3_DOMAIN)));
+        BigInteger tokenId = new BigInteger(1, calculateNamehash(WEB3_DOMAIN));
         String recordValue = resolveDnsARecord(preset, rpcUri, tokenId);
         if (StringUtils.isEmpty(recordValue)) {
             throw new HttpException(0, "Record " + RECORD_DNS_A + " is empty for " + WEB3_DOMAIN);
@@ -116,34 +114,11 @@ final class E444Web3HostResolver {
         return hosts;
     }
 
-    private static String resolveDnsARecord(HttpRequest.Preset preset, Uri rpcUri, Uint256 tokenId)
+    private static String resolveDnsARecord(HttpRequest.Preset preset, Uri rpcUri, BigInteger tokenId)
             throws HttpException {
-        Function getFunction = new Function(
-                "get",
-                Arrays.asList(new Utf8String(RECORD_DNS_A), tokenId),
-                Collections.singletonList(new TypeReference<Utf8String>() {}));
-        String encoded = performEthCall(preset, rpcUri, UNS_PROXY, FunctionEncoder.encode(getFunction));
-        List<Type> decoded = decodeFunctionResult(encoded, getFunction, false);
-        if (decoded == null || decoded.isEmpty() || !(decoded.get(0) instanceof Utf8String)) {
-            return null;
-        }
-        return StringUtils.nullIfEmpty(((Utf8String) decoded.get(0)).getValue());
-    }
-
-    private static List<Type> decodeFunctionResult(String encoded, Function function, boolean allowEmpty)
-            throws HttpException {
-        try {
-            List<Type> decoded = FunctionReturnDecoder.decode(encoded, function.getOutputParameters());
-            if (decoded.isEmpty() && !allowEmpty) {
-                return null;
-            }
-            return decoded;
-        } catch (RuntimeException e) {
-            if (allowEmpty) {
-                return null;
-            }
-            throw new HttpException(0, "Invalid ABI response data");
-        }
+        String callData = encodeGetFunctionCall(RECORD_DNS_A, tokenId);
+        String encodedResult = performEthCall(preset, rpcUri, UNS_PROXY, callData);
+        return decodeSingleStringResult(encodedResult);
     }
 
     private static String performEthCall(HttpRequest.Preset preset, Uri rpcUri, String to, String data)
@@ -213,11 +188,134 @@ final class E444Web3HostResolver {
         String remainder = index >= 0 ? domain.substring(index + 1) : "";
         label = label.toLowerCase(Locale.US);
         byte[] remainderHash = calculateNamehash(remainder);
-        byte[] labelHash = sha3(label.getBytes());
+        byte[] labelHash = sha3(label.getBytes(StandardCharsets.UTF_8));
         byte[] input = new byte[64];
         System.arraycopy(remainderHash, 0, input, 0, 32);
         System.arraycopy(labelHash, 0, input, 32, 32);
         return sha3(input);
+    }
+
+    private static String encodeGetFunctionCall(String key, BigInteger tokenId) throws HttpException {
+        if (StringUtils.isEmpty(key)) {
+            throw new HttpException(0, "Invalid UNS record key");
+        }
+        if (tokenId == null || tokenId.signum() < 0) {
+            throw new HttpException(0, "Invalid UNS token id");
+        }
+
+        byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
+        int paddedKeyLength = ((keyBytes.length + 31) / 32) * 32;
+        int payloadLength = 64 + 32 + paddedKeyLength;
+        byte[] payload = new byte[4 + payloadLength];
+
+        // Selector + ABI args:
+        // 1) offset to string (0x40), 2) uint256 tokenId, then dynamic string payload.
+        System.arraycopy(FUNCTION_SELECTOR_GET, 0, payload, 0, 4);
+        writeUInt256(payload, 4, BigInteger.valueOf(64L));
+        writeUInt256(payload, 36, tokenId);
+        writeUInt256(payload, 68, BigInteger.valueOf(keyBytes.length));
+        System.arraycopy(keyBytes, 0, payload, 100, keyBytes.length);
+
+        return "0x" + bytesToHex(payload);
+    }
+
+    private static String decodeSingleStringResult(String encoded) throws HttpException {
+        byte[] data = decodeHex(encoded);
+        if (data.length == 0) {
+            return null;
+        }
+        if (data.length < 64) {
+            throw new HttpException(0, "Invalid ABI response data");
+        }
+        int offset = readUInt256AsInt(data, 0);
+        if (offset < 0 || offset + 32 > data.length) {
+            throw new HttpException(0, "Invalid ABI response data");
+        }
+        int stringLength = readUInt256AsInt(data, offset);
+        int stringOffset = offset + 32;
+        if (stringLength < 0 || stringOffset + stringLength > data.length) {
+            throw new HttpException(0, "Invalid ABI response data");
+        }
+        return StringUtils.nullIfEmpty(new String(data, stringOffset, stringLength, StandardCharsets.UTF_8));
+    }
+
+    private static void writeUInt256(byte[] output, int offset, BigInteger value) throws HttpException {
+        byte[] valueBytes = value.toByteArray();
+        int sourceOffset = 0;
+        if (valueBytes.length > 32) {
+            if (valueBytes.length == 33 && valueBytes[0] == 0) {
+                sourceOffset = 1;
+            } else {
+                throw new HttpException(0, "Invalid uint256 value");
+            }
+        }
+        int length = valueBytes.length - sourceOffset;
+        if (length > 32) {
+            throw new HttpException(0, "Invalid uint256 value");
+        }
+        System.arraycopy(valueBytes, sourceOffset, output, offset + 32 - length, length);
+    }
+
+    private static int readUInt256AsInt(byte[] input, int offset) throws HttpException {
+        if (offset < 0 || offset + 32 > input.length) {
+            throw new HttpException(0, "Invalid ABI response data");
+        }
+        for (int i = offset; i < offset + 28; i++) {
+            if (input[i] != 0) {
+                throw new HttpException(0, "Invalid ABI response data");
+            }
+        }
+        int value = 0;
+        for (int i = offset + 28; i < offset + 32; i++) {
+            value = (value << 8) | (input[i] & 0xff);
+        }
+        return value;
+    }
+
+    private static byte[] decodeHex(String value) throws HttpException {
+        if (StringUtils.isEmpty(value)) {
+            throw new HttpException(0, "RPC eth_call returned empty result");
+        }
+        String hex = value.startsWith("0x") || value.startsWith("0X") ? value.substring(2) : value;
+        if (hex.length() == 0) {
+            return new byte[0];
+        }
+        if ((hex.length() & 1) != 0) {
+            throw new HttpException(0, "Invalid ABI response data");
+        }
+        byte[] result = new byte[hex.length() / 2];
+        for (int i = 0; i < result.length; i++) {
+            int high = hexDigit(hex.charAt(i * 2));
+            int low = hexDigit(hex.charAt(i * 2 + 1));
+            if (high < 0 || low < 0) {
+                throw new HttpException(0, "Invalid ABI response data");
+            }
+            result[i] = (byte) ((high << 4) | low);
+        }
+        return result;
+    }
+
+    private static String bytesToHex(byte[] bytes) {
+        char[] chars = new char[bytes.length * 2];
+        for (int i = 0; i < bytes.length; i++) {
+            int value = bytes[i] & 0xff;
+            chars[i * 2] = HEX_DIGITS[value >>> 4];
+            chars[i * 2 + 1] = HEX_DIGITS[value & 0x0f];
+        }
+        return new String(chars);
+    }
+
+    private static int hexDigit(char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
     }
 
     private static byte[] sha3(byte[] input) {
