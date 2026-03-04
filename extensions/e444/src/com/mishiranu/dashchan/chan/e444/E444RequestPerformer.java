@@ -1,14 +1,18 @@
 package com.mishiranu.dashchan.chan.e444;
 
 import android.net.Uri;
+import android.util.Log;
+
+import chan.content.InvalidResponseException;
 import chan.http.HttpException;
 import chan.http.HttpRequest;
 import chan.http.HttpResponse;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public final class E444IpRequestPerformer {
+public final class E444RequestPerformer {
     @FunctionalInterface
     public interface RequestConfigurator {
         HttpRequest configure(HttpRequest request);
@@ -19,29 +23,28 @@ public final class E444IpRequestPerformer {
     private final LinkedHashMap<String, String> queryParameters = new LinkedHashMap<>();
     private RequestConfigurator requestConfigurator;
 
-    private E444IpRequestPerformer(HttpRequest.Preset preset, String... pathParts) {
+    private E444RequestPerformer(HttpRequest.Preset preset, String... pathParts) {
         this.preset = preset;
         this.pathParts = pathParts;
     }
 
-    public static E444IpRequestPerformer request(HttpRequest.Preset preset, String... pathParts) {
-        return new E444IpRequestPerformer(preset, pathParts);
+    public static E444RequestPerformer request(HttpRequest.Preset preset, String... pathParts) {
+        return new E444RequestPerformer(preset, pathParts);
     }
 
-    public E444IpRequestPerformer param(String key, String value) {
+    public E444RequestPerformer param(String key, String value) {
         queryParameters.put(key, value);
         return this;
     }
 
-    public E444IpRequestPerformer configure(RequestConfigurator requestConfigurator) {
+    public E444RequestPerformer configure(RequestConfigurator requestConfigurator) {
         this.requestConfigurator = requestConfigurator;
         return this;
     }
 
     public HttpResponse perform() throws HttpException {
-        List<String> hosts = E444Web3HostResolver.resolveHosts(preset);
         HttpException lastSocketException = null;
-        for (String host : hosts) {
+        for (String host : E444Web3HostResolver.resolveHosts(preset)) {
             try {
                 Uri.Builder uriBuilder = new Uri.Builder().scheme("https").authority(host);
                 for (String pathPart : pathParts) {
@@ -54,7 +57,6 @@ public final class E444IpRequestPerformer {
                 if (requestConfigurator != null) {
                     request = requestConfigurator.configure(request);
                 }
-                request.addCookie("usercode_auth", "foobar");
                 return request.perform();
             } catch (HttpException e) {
                 if (e.isSocketException()) {
@@ -68,5 +70,13 @@ public final class E444IpRequestPerformer {
             throw lastSocketException;
         }
         throw new HttpException(0, "No resolved IP host is reachable");
+    }
+
+    public <T> T performJson(Class<T> valueClass) throws HttpException, InvalidResponseException {
+        try{
+            return E444JsonUtils.fromJson(perform().readString(), valueClass);
+        } catch (IOException e) {
+            throw new InvalidResponseException(e);
+        }
     }
 }

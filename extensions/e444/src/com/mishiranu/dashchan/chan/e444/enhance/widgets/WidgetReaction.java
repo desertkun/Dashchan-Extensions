@@ -10,10 +10,11 @@ import android.util.TypedValue;
 import android.widget.TextView;
 import android.widget.Toast;
 import chan.content.model.Post;
-import chan.text.JsonSerial;
-import chan.text.ParseException;
 import chan.util.StringUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
+import com.mishiranu.dashchan.chan.e444.E444JsonUtils;
+import com.mishiranu.dashchan.chan.e444.E444Model;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceReflection;
 import com.mishiranu.dashchan.chan.e444.enhance.TaskCallback;
 import com.mishiranu.dashchan.chan.e444.enhance.tasks.TaskReadIcon;
@@ -27,8 +28,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 public final class WidgetReaction {
     public static final int DEFAULT_ICON_SIZE_DP = 14;
@@ -55,48 +54,17 @@ public final class WidgetReaction {
     private final E444ChanLocator locator;
     private final String iconName;
     private final int count;
-    private String boardName;
-    private int postNumber;
-    private String postStateKey;
+    private final String boardName;
+    private final int postNumber;
+    private final String postStateKey;
 
-    private WidgetReaction(E444ChanLocator locator, String iconName, int count) {
+    public WidgetReaction(E444ChanLocator locator, String iconName, int count, String boardName, int postNumber) {
         this.locator = locator;
         this.iconName = iconName;
         this.count = count;
-    }
-
-    public static WidgetReaction parse(JsonSerial.Reader reader, E444ChanLocator locator)
-            throws IOException, ParseException {
-        String parsedIconName = "";
-        int parsedCount = 0;
-        reader.startObject();
-        while (!reader.endStruct()) {
-            switch (reader.nextName()) {
-                case "icon": {
-                    parsedIconName = reader.nextString();
-                    break;
-                }
-                case "count": {
-                    parsedCount = reader.nextInt();
-                    break;
-                }
-                default: {
-                    reader.skip();
-                    break;
-                }
-            }
-        }
-        if (StringUtils.isEmpty(parsedIconName)) {
-            return null;
-        }
-        return new WidgetReaction(locator, parsedIconName, parsedCount);
-    }
-
-    public static WidgetReaction fromIconName(E444ChanLocator locator, String iconName) {
-        if (StringUtils.isEmpty(iconName)) {
-            return null;
-        }
-        return new WidgetReaction(locator, iconName, 0);
+        this.boardName = boardName;
+        this.postNumber = postNumber;
+        this.postStateKey = boardName + ":" + postNumber;
     }
 
     public static void setBoardReactionIcons(String boardName, List<String> reactionIcons) {
@@ -114,24 +82,13 @@ public final class WidgetReaction {
         return icons != null ? new ArrayList<>(icons) : Collections.emptyList();
     }
 
-    public String getIconName() {
-        return iconName;
-    }
-
     public int getCount() {
         return count;
     }
 
-    public void setPostContext(String boardName, int postNumber) {
-        this.boardName = boardName;
-        this.postNumber = postNumber;
-        this.postStateKey = createPostStateKey(boardName, postNumber);
-    }
-
     public boolean isSelected(Context context) {
         ensureToggledReactionsLoaded(context);
-        String toggledIcon = postStateKey != null ? TOGGLED_REACTION_BY_POST.get(postStateKey) : null;
-        return iconName.equals(toggledIcon);
+        return iconName.equals(TOGGLED_REACTION_BY_POST.get(postStateKey));
     }
 
     public void bindIcon(TextView reactionView, int iconSizeDp) {
@@ -184,10 +141,8 @@ public final class WidgetReaction {
                     @Override
                     public void accept(Void result) {
                         ensureToggledReactionsLoaded(activity.getApplicationContext());
-                        if (postStateKey != null) {
-                            updateReactionSelection(mode);
-                            persistToggledReactions(activity.getApplicationContext());
-                        }
+                        updateReactionSelection(mode);
+                        persistToggledReactions(activity.getApplicationContext());
                         if (onSelectionChanged != null) {
                             onSelectionChanged.run();
                         }
@@ -226,9 +181,6 @@ public final class WidgetReaction {
     }
 
     private void updateReactionSelection(SelectionMode mode) {
-        if (postStateKey == null) {
-            return;
-        }
         if (mode == SelectionMode.SET) {
             TOGGLED_REACTION_BY_POST.put(postStateKey, iconName);
             return;
@@ -318,16 +270,18 @@ public final class WidgetReaction {
             String serialized = preferences.getString(PREFS_KEY_TOGGLED, null);
             if (!StringUtils.isEmpty(serialized)) {
                 try {
-                    JSONObject root = new JSONObject(serialized);
-                    Iterator<String> keys = root.keys();
-                    while (keys.hasNext()) {
-                        String postKey = keys.next();
-                        String icon = root.optString(postKey, null);
-                        if (!StringUtils.isEmpty(icon)) {
-                            TOGGLED_REACTION_BY_POST.put(postKey, icon);
+                    Map<String, String> root =
+                            E444JsonUtils.fromJson(serialized, new TypeReference<Map<String, String>>() {});
+                    if (root != null) {
+                        for (Map.Entry<String, String> entry : root.entrySet()) {
+                            String postKey = entry.getKey();
+                            String icon = StringUtils.nullIfEmpty(entry.getValue());
+                            if (!StringUtils.isEmpty(postKey) && !StringUtils.isEmpty(icon)) {
+                                TOGGLED_REACTION_BY_POST.put(postKey, icon);
+                            }
                         }
                     }
-                } catch (JSONException ignored) {
+                } catch (IOException ignored) {
                     TOGGLED_REACTION_BY_POST.clear();
                 }
             }
@@ -340,18 +294,15 @@ public final class WidgetReaction {
             return;
         }
         synchronized (TOGGLED_REACTIONS_LOCK) {
-            JSONObject root = new JSONObject();
-            for (Map.Entry<String, String> entry : TOGGLED_REACTION_BY_POST.entrySet()) {
-                try {
-                    root.put(entry.getKey(), entry.getValue());
-                } catch (JSONException ignored) {
-                    // Skip invalid key/value pair.
-                }
+            try {
+                String serialized = E444JsonUtils.toJson(TOGGLED_REACTION_BY_POST);
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit()
+                        .putString(PREFS_KEY_TOGGLED, serialized)
+                        .apply();
+            } catch (RuntimeException ignored) {
+                // Ignore serialization failures.
             }
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                    .edit()
-                    .putString(PREFS_KEY_TOGGLED, root.toString())
-                    .apply();
         }
     }
 

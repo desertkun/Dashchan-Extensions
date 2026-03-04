@@ -5,8 +5,9 @@ import chan.http.HttpException;
 import chan.http.HttpRequest;
 import chan.http.SimpleEntity;
 import chan.util.StringUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
+import java.io.IOException;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -15,24 +16,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import org.bouncycastle.jcajce.provider.digest.Keccak;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 final class E444Web3HostResolver {
     private static final String WEB3_DOMAIN = "ech.u";
     private static final String RECORD_DNS_A = "dns.A";
     private static final String FUNCTION_SIGNATURE_GET = "get(string,uint256)";
     private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
-    private static final byte[] FUNCTION_SELECTOR_GET =
-            Arrays.copyOf(sha3(FUNCTION_SIGNATURE_GET.getBytes(StandardCharsets.US_ASCII)), 4);
+    private static final byte[] FUNCTION_SELECTOR_GET = Arrays.copyOf(sha3(FUNCTION_SIGNATURE_GET.getBytes()), 4);
 
     private static final String UNS_PROXY = "0xF6c1b83977DE3dEffC476f5048A0a84d3375d498";
 
     private static final Uri[] BASE_RPC_URIS = {
         Uri.parse("https://base.rpc.blxrbdn.com"),
         Uri.parse("https://api.zan.top/base-mainnet"),
-        Uri.parse("https://base.api.pocket.network")
+        //Uri.parse("https://base.api.pocket.network")
     };
 
     private static final long CACHE_MAX_AGE = 5L * 60L * 1000L;
@@ -123,49 +120,42 @@ final class E444Web3HostResolver {
 
     private static String performEthCall(HttpRequest.Preset preset, Uri rpcUri, String to, String data)
             throws HttpException {
-        JSONObject payload = new JSONObject();
-        JSONObject transaction = new JSONObject();
-        JSONArray params = new JSONArray();
+        E444Model.RpcRequest payload = new E444Model.RpcRequest(to, data);
+        SimpleEntity entity = new SimpleEntity();
         try {
-            transaction.put("to", to);
-            transaction.put("data", data);
-            params.put(transaction);
-            params.put("latest");
-            payload.put("jsonrpc", "2.0");
-            payload.put("id", 1);
-            payload.put("method", "eth_call");
-            payload.put("params", params);
-        } catch (JSONException e) {
+            entity.setData(E444JsonUtils.toJson(payload));
+        } catch (RuntimeException e) {
             throw new HttpException(0, "Unable to build RPC payload");
         }
-        SimpleEntity entity = new SimpleEntity();
-        entity.setData(payload.toString());
         entity.setContentType("application/json");
         String responseText =
                 new HttpRequest(rpcUri, preset).setPostMethod(entity).perform().readString();
         try {
-            JSONObject responseJson = new JSONObject(responseText);
-            JSONObject error = responseJson.optJSONObject("error");
+            E444Model.RpcResponse responseJson = E444JsonUtils.fromJson(responseText, E444Model.RpcResponse.class);
+            E444Model.RpcError error = responseJson != null ? responseJson.error : null;
             if (error != null) {
-                String message = StringUtils.nullIfEmpty(error.optString("message"));
+                String message = StringUtils.nullIfEmpty(error.message);
                 throw new HttpException(0, message != null ? message : "RPC eth_call failed");
             }
-            String result = StringUtils.nullIfEmpty(responseJson.optString("result"));
+            String result = StringUtils.nullIfEmpty(responseJson != null ? responseJson.result : null);
             if (result == null) {
                 throw new HttpException(0, "RPC eth_call returned empty result");
             }
             return result;
-        } catch (JSONException e) {
+        } catch (IOException e) {
             throw new HttpException(0, "Invalid RPC response JSON");
         }
     }
 
     private static List<String> parseIpv4Record(String recordValue) throws HttpException {
         try {
-            JSONArray jsonArray = new JSONArray(recordValue);
+            List<String> jsonArray = E444JsonUtils.fromJson(recordValue, new TypeReference<List<String>>() {});
+            if (jsonArray == null) {
+                throw new HttpException(0, "Record " + RECORD_DNS_A + " is not a valid JSON array");
+            }
             LinkedHashSet<String> hosts = new LinkedHashSet<>();
-            for (int i = 0; i < jsonArray.length(); i++) {
-                String host = StringUtils.nullIfEmpty(jsonArray.optString(i, null));
+            for (String value : jsonArray) {
+                String host = StringUtils.nullIfEmpty(value);
                 if (host != null) {
                     host = host.trim();
                     if (IPV4_PATTERN.matcher(host).matches()) {
@@ -174,7 +164,7 @@ final class E444Web3HostResolver {
                 }
             }
             return new ArrayList<>(hosts);
-        } catch (JSONException e) {
+        } catch (IOException e) {
             throw new HttpException(0, "Record " + RECORD_DNS_A + " is not a valid JSON array");
         }
     }
@@ -188,7 +178,7 @@ final class E444Web3HostResolver {
         String remainder = index >= 0 ? domain.substring(index + 1) : "";
         label = label.toLowerCase(Locale.US);
         byte[] remainderHash = calculateNamehash(remainder);
-        byte[] labelHash = sha3(label.getBytes(StandardCharsets.UTF_8));
+        byte[] labelHash = sha3(label.getBytes());
         byte[] input = new byte[64];
         System.arraycopy(remainderHash, 0, input, 0, 32);
         System.arraycopy(labelHash, 0, input, 32, 32);
@@ -203,13 +193,11 @@ final class E444Web3HostResolver {
             throw new HttpException(0, "Invalid UNS token id");
         }
 
-        byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
+        byte[] keyBytes = key.getBytes();
         int paddedKeyLength = ((keyBytes.length + 31) / 32) * 32;
         int payloadLength = 64 + 32 + paddedKeyLength;
         byte[] payload = new byte[4 + payloadLength];
 
-        // Selector + ABI args:
-        // 1) offset to string (0x40), 2) uint256 tokenId, then dynamic string payload.
         System.arraycopy(FUNCTION_SELECTOR_GET, 0, payload, 0, 4);
         writeUInt256(payload, 4, BigInteger.valueOf(64L));
         writeUInt256(payload, 36, tokenId);
@@ -236,7 +224,7 @@ final class E444Web3HostResolver {
         if (stringLength < 0 || stringOffset + stringLength > data.length) {
             throw new HttpException(0, "Invalid ABI response data");
         }
-        return StringUtils.nullIfEmpty(new String(data, stringOffset, stringLength, StandardCharsets.UTF_8));
+        return StringUtils.nullIfEmpty(new String(data, stringOffset, stringLength));
     }
 
     private static void writeUInt256(byte[] output, int offset, BigInteger value) throws HttpException {
@@ -277,19 +265,13 @@ final class E444Web3HostResolver {
             throw new HttpException(0, "RPC eth_call returned empty result");
         }
         String hex = value.startsWith("0x") || value.startsWith("0X") ? value.substring(2) : value;
-        if (hex.length() == 0) {
-            return new byte[0];
-        }
-        if ((hex.length() & 1) != 0) {
+        if (hex.length() % 2 != 0) {
             throw new HttpException(0, "Invalid ABI response data");
         }
         byte[] result = new byte[hex.length() / 2];
         for (int i = 0; i < result.length; i++) {
             int high = hexDigit(hex.charAt(i * 2));
             int low = hexDigit(hex.charAt(i * 2 + 1));
-            if (high < 0 || low < 0) {
-                throw new HttpException(0, "Invalid ABI response data");
-            }
             result[i] = (byte) ((high << 4) | low);
         }
         return result;
@@ -305,7 +287,7 @@ final class E444Web3HostResolver {
         return new String(chars);
     }
 
-    private static int hexDigit(char c) {
+    private static int hexDigit(char c) throws HttpException {
         if (c >= '0' && c <= '9') {
             return c - '0';
         }
@@ -315,7 +297,7 @@ final class E444Web3HostResolver {
         if (c >= 'A' && c <= 'F') {
             return c - 'A' + 10;
         }
-        return -1;
+        throw new HttpException(0, "Invalid HEX");
     }
 
     private static byte[] sha3(byte[] input) {

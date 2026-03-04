@@ -6,7 +6,7 @@ import chan.http.HttpException;
 import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
-import com.mishiranu.dashchan.chan.e444.E444IpRequestPerformer;
+import com.mishiranu.dashchan.chan.e444.E444RequestPerformer;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceTask;
 import java.io.InputStream;
 
@@ -19,7 +19,7 @@ public final class TaskReadIcon implements EnhanceTask<Bitmap> {
 
     @Override
     public Bitmap run(E444ChanLocator locator, HttpRequest.Preset preset) throws Exception {
-        HttpResponse response = E444IpRequestPerformer.request(preset, "static", "img", "reactions", iconName)
+        HttpResponse response = E444RequestPerformer.request(preset, "static", "img", "reactions", iconName)
                 .configure(HttpRequest::setGetMethod)
                 .perform();
         try (InputStream input = response.open()) {

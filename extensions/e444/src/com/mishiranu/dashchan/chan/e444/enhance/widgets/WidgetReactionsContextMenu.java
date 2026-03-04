@@ -28,22 +28,16 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
     private static final float MAX_SCROLL_HEIGHT_FRACTION = 0.45f;
     private final List<WidgetReaction> reactions;
 
-    public WidgetReactionsContextMenu(E444ChanLocator locator, List<String> iconNames) {
+    public WidgetReactionsContextMenu(E444ChanLocator locator, List<String> iconNames, String boardName, int postNumber) {
         ArrayList<WidgetReaction> parsedReactions = new ArrayList<>(iconNames.size());
         for (String iconName : iconNames) {
-            parsedReactions.add(WidgetReaction.fromIconName(locator, iconName));
+            parsedReactions.add(new WidgetReaction(locator, iconName, 0, boardName, postNumber));
         }
         reactions = parsedReactions;
     }
 
     public boolean isEmpty() {
         return reactions.isEmpty();
-    }
-
-    public void setPostContext(String boardName, int postNumber) {
-        for (WidgetReaction reaction : reactions) {
-            reaction.setPostContext(boardName, postNumber);
-        }
     }
 
     @Override

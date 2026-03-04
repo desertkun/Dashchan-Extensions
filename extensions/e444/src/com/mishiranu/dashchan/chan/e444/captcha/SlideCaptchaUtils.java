@@ -8,8 +8,8 @@ import chan.content.InvalidResponseException;
 import chan.util.StringUtils;
 import java.util.Arrays;
 
-public final class E444SlideCaptchaUtils {
-    private E444SlideCaptchaUtils() {}
+public final class SlideCaptchaUtils {
+    private SlideCaptchaUtils() {}
 
     public interface SlideCaptchaChoiceCallback<T extends Throwable> {
         Integer choose(Bitmap[] images) throws T;

@@ -11,17 +11,15 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import chan.text.JsonSerial;
-import chan.text.ParseException;
 import com.google.android.flexbox.AlignItems;
 import com.google.android.flexbox.FlexDirection;
 import com.google.android.flexbox.FlexWrap;
 import com.google.android.flexbox.FlexboxLayout;
 import com.google.android.flexbox.JustifyContent;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
+import com.mishiranu.dashchan.chan.e444.E444Model;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceReflection;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
-import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,59 +56,29 @@ public final class WidgetMenu implements EnhanceWidget {
             this.label = label;
             this.url = url;
         }
-
-        private static MenuLink parse(JsonSerial.Reader reader) throws IOException, ParseException {
-            String label = "";
-            String url = "";
-            reader.startObject();
-            while (!reader.endStruct()) {
-                switch (reader.nextName()) {
-                    case "label": {
-                        label = reader.nextString().trim();
-                        break;
-                    }
-                    case "url": {
-                        url = reader.nextString().trim();
-                        break;
-                    }
-                    default: {
-                        reader.skip();
-                        break;
-                    }
-                }
-            }
-            return new MenuLink(label, url);
-        }
     }
 
-    public WidgetMenu(JsonSerial.Reader reader, E444ChanLocator locator) throws IOException, ParseException {
+    public WidgetMenu(List<E444Model.MenuSection> menuSections, E444ChanLocator locator) {
         this.locator = locator;
         ArrayList<MenuSection> parsedSections = new ArrayList<>();
-        reader.startArray();
-        while (!reader.endStruct()) {
-            String sectionName = "";
-            ArrayList<MenuLink> sectionLinks = new ArrayList<>();
-            reader.startObject();
-            while (!reader.endStruct()) {
-                switch (reader.nextName()) {
-                    case "sectionName": {
-                        sectionName = reader.nextString().trim();
-                        break;
-                    }
-                    case "links": {
-                        reader.startArray();
-                        while (!reader.endStruct()) {
-                            sectionLinks.add(MenuLink.parse(reader));
+        if (menuSections != null) {
+            for (E444Model.MenuSection sectionJson : menuSections) {
+                String sectionName = sectionJson != null && sectionJson.sectionName != null
+                        ? sectionJson.sectionName.trim()
+                        : "";
+                ArrayList<MenuLink> sectionLinks = new ArrayList<>();
+                if (sectionJson != null && sectionJson.links != null) {
+                    for (E444Model.MenuLink linkJson : sectionJson.links) {
+                        if (linkJson == null) {
+                            continue;
                         }
-                        break;
-                    }
-                    default: {
-                        reader.skip();
-                        break;
+                        String label = linkJson.label != null ? linkJson.label.trim() : "";
+                        String url = linkJson.url != null ? linkJson.url.trim() : "";
+                        sectionLinks.add(new MenuLink(label, url));
                     }
                 }
+                parsedSections.add(new MenuSection(sectionName, sectionLinks));
             }
-            parsedSections.add(new MenuSection(sectionName, sectionLinks));
         }
         this.sections = parsedSections;
     }

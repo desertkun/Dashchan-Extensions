@@ -13,37 +13,30 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import chan.text.JsonSerial;
-import chan.text.ParseException;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
+import com.mishiranu.dashchan.chan.e444.E444Model;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
 import com.google.android.flexbox.AlignItems;
 import com.google.android.flexbox.FlexDirection;
 import com.google.android.flexbox.FlexWrap;
 import com.google.android.flexbox.FlexboxLayout;
 import com.google.android.flexbox.JustifyContent;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class WidgetReactionsPost implements EnhanceWidget {
     public static final String CONTAINER_TAG = "e444_post_injected_reactions_container";
     private static final int TAG_REACTION_ITEM = 0xE4442101;
-    private final List<WidgetReaction> reactions;
+    private final List<WidgetReaction> reactions = new ArrayList<>();
 
-    public WidgetReactionsPost(JsonSerial.Reader reader, E444ChanLocator locator)
-            throws IOException, ParseException {
-        reactions = parseReactions(reader, locator);
+    public WidgetReactionsPost(List<E444Model.Reaction> reactionsJson, E444ChanLocator locator, String boardName, int postNumber) {
+        for (E444Model.Reaction reaction : reactionsJson) {
+            reactions.add(new WidgetReaction(locator, reaction.icon, reaction.count, boardName, postNumber));
+        }
     }
 
     public boolean isEmpty() {
         return reactions.isEmpty();
-    }
-
-    public void setPostContext(String boardName, int postNumber) {
-        for (WidgetReaction reaction : reactions) {
-            reaction.setPostContext(boardName, postNumber);
-        }
     }
 
     @Override
@@ -79,19 +72,6 @@ public final class WidgetReactionsPost implements EnhanceWidget {
             bindReactionBubble(activity, bubble, reaction, refreshSelectionState);
         }
         applyReactionSelectionState(activity, flexbox);
-    }
-
-    private static ArrayList<WidgetReaction> parseReactions(JsonSerial.Reader reader, E444ChanLocator locator)
-            throws IOException, ParseException {
-        ArrayList<WidgetReaction> parsedReactions = new ArrayList<>();
-        reader.startArray();
-        while (!reader.endStruct()) {
-            WidgetReaction reaction = WidgetReaction.parse(reader, locator);
-            if (reaction != null) {
-                parsedReactions.add(reaction);
-            }
-        }
-        return parsedReactions;
     }
 
     private static LinearLayout obtainOrCreateContainer(Activity activity, ViewGroup postRoot) {
