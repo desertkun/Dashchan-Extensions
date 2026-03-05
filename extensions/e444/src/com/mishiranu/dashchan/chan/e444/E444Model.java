@@ -1,6 +1,8 @@
 package com.mishiranu.dashchan.chan.e444;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
+import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.util.Arrays;
 import java.util.List;
 
@@ -155,6 +157,7 @@ public final class E444Model {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonNaming(PropertyNamingStrategies.LowerCamelCaseStrategy.class)
     public static final class MenuSection {
         public String sectionName;
         public List<MenuLink> links;

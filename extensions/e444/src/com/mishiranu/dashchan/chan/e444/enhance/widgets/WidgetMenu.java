@@ -3,6 +3,7 @@ package com.mishiranu.dashchan.chan.e444.enhance.widgets;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -61,24 +62,12 @@ public final class WidgetMenu implements EnhanceWidget {
     public WidgetMenu(List<E444Model.MenuSection> menuSections, E444ChanLocator locator) {
         this.locator = locator;
         ArrayList<MenuSection> parsedSections = new ArrayList<>();
-        if (menuSections != null) {
-            for (E444Model.MenuSection sectionJson : menuSections) {
-                String sectionName = sectionJson != null && sectionJson.sectionName != null
-                        ? sectionJson.sectionName.trim()
-                        : "";
-                ArrayList<MenuLink> sectionLinks = new ArrayList<>();
-                if (sectionJson != null && sectionJson.links != null) {
-                    for (E444Model.MenuLink linkJson : sectionJson.links) {
-                        if (linkJson == null) {
-                            continue;
-                        }
-                        String label = linkJson.label != null ? linkJson.label.trim() : "";
-                        String url = linkJson.url != null ? linkJson.url.trim() : "";
-                        sectionLinks.add(new MenuLink(label, url));
-                    }
-                }
-                parsedSections.add(new MenuSection(sectionName, sectionLinks));
+        for (E444Model.MenuSection section : menuSections) {
+            ArrayList<MenuLink> sectionLinks = new ArrayList<>();
+            for (E444Model.MenuLink link : section.links) {
+                sectionLinks.add(new MenuLink(link.label, link.url));
             }
+            parsedSections.add(new MenuSection(section.sectionName, sectionLinks));
         }
         this.sections = parsedSections;
     }
@@ -132,11 +121,13 @@ public final class WidgetMenu implements EnhanceWidget {
     }
 
     private void applySections(Activity activity, LinearLayout container, List<MenuSection> sections) {
+        int titleTextColor = resolveAttrColor(activity, android.R.attr.textColorPrimary);
         for (int sectionIndex = 0; sectionIndex < sections.size(); sectionIndex++) {
             MenuSection section = sections.get(sectionIndex);
             int titleIndex = sectionIndex * 2;
             TextView titleView = obtainOrCreateTitleView(activity, container, titleIndex);
             titleView.setText(section.title);
+            titleView.setTextColor(titleTextColor);
             FlexboxLayout linksLayout = obtainOrCreateLinksLayout(activity, container, titleIndex + 1);
             for (int i = 0; i < section.links.size(); i++) {
                 final MenuLink menuItem = section.links.get(i);
@@ -283,5 +274,12 @@ public final class WidgetMenu implements EnhanceWidget {
     private static int dp(Activity activity, int value) {
         return Math.round(TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, value, activity.getResources().getDisplayMetrics()));
+    }
+
+    private static int resolveAttrColor(Activity activity, int attr) {
+        android.content.res.TypedArray typedArray = activity.obtainStyledAttributes(new int[] {attr});
+        int color = typedArray.getColor(0, 0);
+        typedArray.recycle();
+        return color;
     }
 }
