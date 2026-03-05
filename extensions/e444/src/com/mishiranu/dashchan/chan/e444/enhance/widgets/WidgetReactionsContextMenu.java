@@ -26,12 +26,18 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
     private static final int ICON_SIZE_DP = WidgetReaction.DEFAULT_ICON_SIZE_DP * 2;
     private static final int CELL_WIDTH_DP = 48;
     private static final float MAX_SCROLL_HEIGHT_FRACTION = 0.45f;
+    private final String boardName;
+    private final int postNumber;
+    private final String postStateKey;
     private final List<WidgetReaction> reactions;
 
     public WidgetReactionsContextMenu(E444ChanLocator locator, List<String> iconNames, String boardName, int postNumber) {
+        this.boardName = boardName;
+        this.postNumber = postNumber;
+        this.postStateKey = WidgetReaction.buildPostStateKey(boardName, postNumber);
         ArrayList<WidgetReaction> parsedReactions = new ArrayList<>(iconNames.size());
         for (String iconName : iconNames) {
-            parsedReactions.add(new WidgetReaction(locator, iconName, 0, boardName, postNumber));
+            parsedReactions.add(new WidgetReaction(locator, iconName));
         }
         reactions = parsedReactions;
     }
@@ -122,7 +128,7 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
         return layoutParams;
     }
 
-    private static void bindReactionView(
+    private void bindReactionView(
             Activity activity,
             TextView reactionView,
             WidgetReaction reaction,
@@ -140,14 +146,16 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
         reaction.bindClick(
                 activity,
                 reactionView,
+                boardName,
+                postNumber,
+                postStateKey,
                 WidgetReaction.SelectionMode.SET,
                 onReactionClick,
-                null,
                 refreshSelectionState);
         applyReactionViewState(activity, reactionView, reaction);
     }
 
-    private static void applyReactionSelectionState(Activity activity, FlexboxLayout flexbox) {
+    private void applyReactionSelectionState(Activity activity, FlexboxLayout flexbox) {
         for (int i = 0; i < flexbox.getChildCount(); i++) {
             View child = flexbox.getChildAt(i);
             if (!(child instanceof TextView)) {
@@ -163,8 +171,9 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
         }
     }
 
-    private static void applyReactionViewState(Activity activity, TextView reactionView, WidgetReaction reaction) {
-        reactionView.setSelected(reaction.isSelected(activity.getApplicationContext()));
+    private void applyReactionViewState(Activity activity, TextView reactionView, WidgetReaction reaction) {
+        reactionView.setSelected(WidgetReactionsPost.isSelected(
+                activity.getApplicationContext(), postStateKey, reaction.getIconName()));
     }
 
     private static void applyMaxScrollHeight(Activity activity, ScrollView scrollView, FlexboxLayout flexbox) {

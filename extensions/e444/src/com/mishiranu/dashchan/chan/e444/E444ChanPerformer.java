@@ -45,6 +45,7 @@ public class E444ChanPerformer extends ChanPerformer {
         if (postJson.parent > 0) {
             post.setParentPostNumber(Integer.toString(postJson.parent));
         }
+        post.setThreadNumber(Integer.toString(postJson.parent > 0 ? postJson.parent : postJson.num));
         post.setPostNumber(Integer.toString(postJson.num));
         post.setOriginalPoster(postJson.op != 0);
         post.setSticky(postJson.sticky != 0);
@@ -79,26 +80,31 @@ public class E444ChanPerformer extends ChanPerformer {
             post.setAttachments(attachments);
         }
 
-        ArrayList<EnhanceWidget> widgetsForPost = new ArrayList<>();
-        if (!postJson.menu.isEmpty()) {
-            widgetsForPost.add(new WidgetMenu(postJson.menu, locator));
-        }
-        if (postJson.reactions != null) {
-            widgetsForPost.add(new WidgetReactionsPost(postJson.reactions, locator, postJson.board, postJson.num));
-        }
-        HookPost.setWidgetsForPost(postJson.board, postJson.num, widgetsForPost);
-
-        ArrayList<EnhanceWidget> widgetsForContextMenu = new ArrayList<>();
-        ArrayList<String> contextMenuReactionIcons = new ArrayList<>();
-        for (String iconName : WidgetReaction.getBoardReactionIcons(postJson.board)) {
-            if (!iconName.isEmpty()) {
-                contextMenuReactionIcons.add(iconName);
+        HookPost.enterPostScope("e444", postJson.board, postJson.num);
+        try {
+            ArrayList<EnhanceWidget> widgetsForPost = new ArrayList<>();
+            if (!postJson.menu.isEmpty()) {
+                widgetsForPost.add(new WidgetMenu(postJson.menu, locator));
             }
+            if (postJson.reactions != null) {
+                widgetsForPost.add(new WidgetReactionsPost(postJson.reactions, locator, postJson.board, postJson.num));
+            }
+            HookPost.setWidgetsForPost(widgetsForPost);
+
+            ArrayList<EnhanceWidget> widgetsForContextMenu = new ArrayList<>();
+            ArrayList<String> contextMenuReactionIcons = new ArrayList<>();
+            for (String iconName : WidgetReaction.getBoardReactionIcons(postJson.board)) {
+                if (!iconName.isEmpty()) {
+                    contextMenuReactionIcons.add(iconName);
+                }
+            }
+            if (!contextMenuReactionIcons.isEmpty()) {
+                widgetsForContextMenu.add(new WidgetReactionsContextMenu(locator, contextMenuReactionIcons, postJson.board, postJson.num));
+            }
+            HookPost.setContextMenuWidgetsForPost(widgetsForContextMenu);
+        } finally {
+            HookPost.exitPostScope();
         }
-        if (!contextMenuReactionIcons.isEmpty()) {
-            widgetsForContextMenu.add(new WidgetReactionsContextMenu(locator, contextMenuReactionIcons, postJson.board, postJson.num));
-        }
-        HookPost.setContextMenuWidgetsForPost(postJson.board, postJson.num, widgetsForContextMenu);
 
         return post;
     }

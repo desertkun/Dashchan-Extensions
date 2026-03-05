@@ -1,8 +1,6 @@
 package com.mishiranu.dashchan.chan.e444.enhance;
 
 import android.app.Activity;
-import android.os.Build;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import com.mishiranu.dashchan.chan.e444.enhance.controllers.HookPost;
@@ -14,7 +12,6 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 final class EnhanceHookManager {
-    private static final String TAG = "EnhanceHookManager";
     private static final String TARGET_CHAN_NAME = "e444";
     private static final List<EnhanceHook> CONTROLLERS =
             Collections.unmodifiableList(Arrays.asList(HookPost.getInstance()));
@@ -22,16 +19,13 @@ final class EnhanceHookManager {
 
     private static final class ActivityStateObserver {
         final WeakReference<Activity> activityReference;
-        final ViewTreeObserver.OnGlobalLayoutListener layoutListener;
         final ViewTreeObserver.OnPreDrawListener preDrawListener;
         boolean applyRequested = true;
 
         ActivityStateObserver(
                 WeakReference<Activity> activityReference,
-                ViewTreeObserver.OnGlobalLayoutListener layoutListener,
                 ViewTreeObserver.OnPreDrawListener preDrawListener) {
             this.activityReference = activityReference;
-            this.layoutListener = layoutListener;
             this.preDrawListener = preDrawListener;
         }
 
@@ -58,10 +52,6 @@ final class EnhanceHookManager {
     private EnhanceHookManager() {}
 
     static void onActivityResumed(Activity activity) {
-        Log.d(
-                TAG,
-                "onActivityResumed class=" + activity.getClass().getName() + " activeChan="
-                        + isTargetChanActive(activity));
         if (!isTargetChanActive(activity)) {
             detachActivityStateObserver(activity);
             clearAll(activity);
@@ -88,6 +78,7 @@ final class EnhanceHookManager {
         } else {
             attachActivityStateObserver(activity);
             requestApply(activity);
+            applyAll(activity);
         }
     }
 
@@ -99,18 +90,6 @@ final class EnhanceHookManager {
         }
         WeakReference<Activity> activityReference = new WeakReference<>(activity);
         ActivityStateObserver[] observerHolder = new ActivityStateObserver[1];
-        ViewTreeObserver.OnGlobalLayoutListener layoutListener = new ViewTreeObserver.OnGlobalLayoutListener() {
-            @Override
-            public void onGlobalLayout() {
-                Activity observedActivity = activityReference.get();
-                if (observedActivity == null
-                        || observedActivity.isFinishing()
-                        || EnhanceReflection.isActivityDestroyed(observedActivity)) {
-                    return;
-                }
-                observerHolder[0].requestApply();
-            }
-        };
         ViewTreeObserver.OnPreDrawListener preDrawListener = new ViewTreeObserver.OnPreDrawListener() {
             @Override
             public boolean onPreDraw() {
@@ -118,13 +97,12 @@ final class EnhanceHookManager {
                 return observer == null || observer.onPreDraw();
             }
         };
-        ActivityStateObserver observer = new ActivityStateObserver(activityReference, layoutListener, preDrawListener);
+        ActivityStateObserver observer = new ActivityStateObserver(activityReference, preDrawListener);
         observerHolder[0] = observer;
         ViewTreeObserver viewTreeObserver = decorView.getViewTreeObserver();
         if (!viewTreeObserver.isAlive()) {
             return;
         }
-        viewTreeObserver.addOnGlobalLayoutListener(layoutListener);
         viewTreeObserver.addOnPreDrawListener(preDrawListener);
         activityStateObservers.put(activity, observer);
     }
@@ -141,11 +119,6 @@ final class EnhanceHookManager {
         ViewTreeObserver viewTreeObserver = decorView.getViewTreeObserver();
         if (!viewTreeObserver.isAlive()) {
             return;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN) {
-            viewTreeObserver.removeOnGlobalLayoutListener(stateObserver.layoutListener);
-        } else {
-            viewTreeObserver.removeGlobalOnLayoutListener(stateObserver.layoutListener);
         }
         viewTreeObserver.removeOnPreDrawListener(stateObserver.preDrawListener);
     }
@@ -168,12 +141,12 @@ final class EnhanceHookManager {
             clearAll(activity);
             return;
         }
-        Log.d(TAG, "applyAll class=" + activity.getClass().getName());
         for (EnhanceHook controller : CONTROLLERS) {
             try {
                 controller.apply(activity);
             } catch (Throwable t) {
-                Log.e(TAG, "Controller apply failed: " + controller.getClass().getName(), t);
+                throw new RuntimeException(
+                        "Controller apply failed: " + controller.getClass().getName(), t);
             }
         }
     }
@@ -183,7 +156,8 @@ final class EnhanceHookManager {
             try {
                 controller.clear(activity);
             } catch (Throwable t) {
-                Log.e(TAG, "Controller clear failed: " + controller.getClass().getName(), t);
+                throw new RuntimeException(
+                        "Controller clear failed: " + controller.getClass().getName(), t);
             }
         }
     }

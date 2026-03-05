@@ -160,35 +160,10 @@ public final class EnhanceReflection {
         return boardName.isEmpty() ? null : boardName;
     }
 
-    public static String resolveActiveThreadNumber(Activity activity) {
-        Object page = resolveCurrentPage(activity);
-        if (page == null) {
-            return null;
-        }
-        String threadNumber = readStringField(page, "threadNumber");
-        if (threadNumber == null) {
-            threadNumber = castString(invokeNoArgs(page, "getThreadNumber"));
-        }
-        if (threadNumber == null) {
-            return null;
-        }
-        threadNumber = threadNumber.trim();
-        return threadNumber.isEmpty() ? null : threadNumber;
-    }
-
     public static boolean requestThreadRefresh(Activity activity) {
         Object currentFragment = invokeNoArgs(activity, METHOD_GET_CURRENT_FRAGMENT);
         Object listPage = readField(currentFragment, "listPage");
         return invokeOnListPulled(listPage);
-    }
-
-    public static boolean requestThreadPostRebind(Activity activity, String boardName, int postNumber) {
-        return HookPost.requestThreadPostRebind(activity, boardName, postNumber);
-    }
-
-    public static boolean replaceThreadPost(
-            Activity activity, E444ChanLocator locator, String boardName, int postNumber, Object post) {
-        return HookPost.replaceThreadPost(activity, locator, boardName, postNumber, post);
     }
 
     public static void showError(Throwable throwable) {

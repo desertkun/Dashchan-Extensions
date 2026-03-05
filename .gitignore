@@ -12,6 +12,7 @@
 !/extensions
 /extensions/*/*
 !/extensions/*/build.gradle
+!/extensions/*/proguard-rules.pro
 !/extensions/*/res
 !/extensions/*/src
 !/gradle
