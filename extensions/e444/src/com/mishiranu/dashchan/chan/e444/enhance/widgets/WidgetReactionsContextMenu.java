@@ -149,7 +149,7 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
                 boardName,
                 postNumber,
                 postStateKey,
-                WidgetReaction.SelectionMode.SET,
+                WidgetReaction.SelectionMode.TOGGLE,
                 onReactionClick,
                 refreshSelectionState);
         applyReactionViewState(activity, reactionView, reaction);
