@@ -23,6 +23,7 @@ import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceShim;
 import com.mishiranu.dashchan.chan.e444.enhance.controllers.HookPost;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetMenu;
+import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetPoll;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReaction;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReactionsContextMenu;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReactionsPost;
@@ -85,6 +86,17 @@ public class E444ChanPerformer extends ChanPerformer {
             ArrayList<EnhanceWidget> widgetsForPost = new ArrayList<>();
             if (!postJson.menu.isEmpty()) {
                 widgetsForPost.add(new WidgetMenu(postJson.menu, locator));
+            }
+            if (postJson.answers != null) {
+                WidgetPoll widgetPoll = new WidgetPoll(
+                        locator,
+                        postJson.board,
+                        postJson.num,
+                        postJson.answers,
+                        postJson.poll_results_exact);
+                if (!widgetPoll.isEmpty()) {
+                    widgetsForPost.add(widgetPoll);
+                }
             }
             if (postJson.reactions != null) {
                 widgetsForPost.add(new WidgetReactionsPost(postJson.reactions, locator, postJson.board, postJson.num));

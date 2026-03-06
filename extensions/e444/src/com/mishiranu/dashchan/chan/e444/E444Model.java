@@ -75,6 +75,8 @@ public final class E444Model {
         public List<Post> posts;
         public List<MenuSection> menu;
         public List<Reaction> reactions;
+        public List<String> answers;
+        public List<Integer> poll_results_exact;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
