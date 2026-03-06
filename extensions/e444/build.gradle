@@ -2,7 +2,7 @@ apply plugin: 'chan-extension'
 apply plugin: 'com.diffplug.spotless'
 
 chan {
-	versionName '1.2'
+	versionName '1.3'
 	apiVersion 1
 	hosts 'ech.u'
 }
