@@ -158,8 +158,9 @@ public class E444ChanPerformer extends ChanPerformer {
     public ReadPostsResult onReadPosts(ReadPostsData data) throws HttpException, InvalidResponseException {
         E444ChanLocator locator = E444ChanLocator.get(this);
         E444ChanConfiguration configuration = E444ChanConfiguration.get(this);
-        E444Model.PostsResponse response = E444RequestPerformer.request(data, data.boardName, "res", data.threadNumber + ".json")
-                .configure(request -> request.setValidator(data.validator))
+        // Widgets are populated via createPost(), so always read a full thread payload.
+        E444Model.PostsResponse response = E444RequestPerformer.request(
+                        data, data.boardName, "res", data.threadNumber + ".json")
                 .performJson(E444Model.PostsResponse.class);
         configuration.updateFromBoards(response.board);
         ArrayList<Post> posts = new ArrayList<>();

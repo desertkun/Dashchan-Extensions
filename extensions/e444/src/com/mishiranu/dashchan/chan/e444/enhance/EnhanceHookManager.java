@@ -12,7 +12,6 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 final class EnhanceHookManager {
-    private static final String TARGET_CHAN_NAME = "e444";
     private static final List<EnhanceHook> CONTROLLERS =
             Collections.unmodifiableList(Arrays.asList(HookPost.getInstance()));
     private static final Map<Activity, ActivityStateObserver> activityStateObservers = new WeakHashMap<>();
@@ -21,6 +20,8 @@ final class EnhanceHookManager {
         final WeakReference<Activity> activityReference;
         final ViewTreeObserver.OnPreDrawListener preDrawListener;
         boolean applyRequested = true;
+        boolean lastThreadPageActive;
+        Object lastPageToken;
 
         ActivityStateObserver(
                 WeakReference<Activity> activityReference,
@@ -40,6 +41,13 @@ final class EnhanceHookManager {
                     || EnhanceReflection.isActivityDestroyed(observedActivity)) {
                 return true;
             }
+            boolean threadPageActive = EnhanceReflection.isThreadPageActive(observedActivity);
+            Object pageToken = threadPageActive ? EnhanceReflection.resolveCurrentPageToken(observedActivity) : null;
+            if (threadPageActive != lastThreadPageActive || pageToken != lastPageToken) {
+                lastThreadPageActive = threadPageActive;
+                lastPageToken = pageToken;
+                applyRequested = true;
+            }
             if (!applyRequested) {
                 return true;
             }
@@ -52,13 +60,13 @@ final class EnhanceHookManager {
     private EnhanceHookManager() {}
 
     static void onActivityResumed(Activity activity) {
-        if (!isTargetChanActive(activity)) {
-            detachActivityStateObserver(activity);
-            clearAll(activity);
-            return;
-        }
         attachActivityStateObserver(activity);
-        requestApply(activity);
+        ActivityStateObserver observer = activityStateObservers.get(activity);
+        if (observer != null) {
+            observer.requestApply();
+        } else {
+            applyAll(activity);
+        }
     }
 
     static void onActivityPaused(Activity activity) {
@@ -72,12 +80,15 @@ final class EnhanceHookManager {
     }
 
     static void syncActivity(Activity activity, boolean paused) {
-        if (paused || !isTargetChanActive(activity)) {
+        if (paused) {
             detachActivityStateObserver(activity);
             clearAll(activity);
         } else {
             attachActivityStateObserver(activity);
-            requestApply(activity);
+            ActivityStateObserver observer = activityStateObservers.get(activity);
+            if (observer != null) {
+                observer.requestApply();
+            }
             applyAll(activity);
         }
     }
@@ -123,27 +134,14 @@ final class EnhanceHookManager {
         viewTreeObserver.removeOnPreDrawListener(stateObserver.preDrawListener);
     }
 
-    private static void requestApply(Activity activity) {
-        if (!isTargetChanActive(activity)) {
-            clearAll(activity);
-            return;
-        }
-        ActivityStateObserver observer = activityStateObservers.get(activity);
-        if (observer != null) {
-            observer.requestApply();
-        } else {
-            applyAll(activity);
-        }
-    }
-
     private static void applyAll(Activity activity) {
-        if (!isTargetChanActive(activity)) {
-            clearAll(activity);
-            return;
-        }
         for (EnhanceHook controller : CONTROLLERS) {
             try {
-                controller.apply(activity);
+                if (EnhanceReflection.isThreadPageActive(activity)) {
+                    controller.apply(activity);
+                } else {
+                    controller.clear(activity);
+                }
             } catch (Throwable t) {
                 throw new RuntimeException(
                         "Controller apply failed: " + controller.getClass().getName(), t);
@@ -160,9 +158,5 @@ final class EnhanceHookManager {
                         "Controller clear failed: " + controller.getClass().getName(), t);
             }
         }
-    }
-
-    private static boolean isTargetChanActive(Activity activity) {
-        return EnhanceReflection.isActiveChan(activity, TARGET_CHAN_NAME);
     }
 }

@@ -51,7 +51,6 @@ public final class EnhanceShim {
                 return false;
             }
             try {
-                HookPost.prepareProxyCache(appContext);
                 ((Application) appContext)
                         .registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
                             @Override

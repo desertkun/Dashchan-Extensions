@@ -1,7 +1,6 @@
 package com.mishiranu.dashchan.chan.e444.enhance.controllers;
 
 import android.app.Activity;
-import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -17,7 +16,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -64,10 +63,6 @@ public final class HookPost implements EnhanceHook {
 
     public static HookPost getInstance() {
         return INSTANCE;
-    }
-
-    public static void prepareProxyCache(Context context) {
-        // No cache is required for this implementation.
     }
 
     public static void enterPostScope(String chanName, String boardName, int postNumber) {
@@ -121,6 +116,9 @@ public final class HookPost implements EnhanceHook {
 
         ViewGroup primaryCollectionView = EnhanceReflection.resolvePostsCollectionView(activity);
         Set<ViewGroup> postCollections = collectPostCollections(primaryCollectionView, bottomBarId, textBarPaddingId);
+        if (postCollections.isEmpty()) {
+            throw new IllegalStateException("Posts collection view is not available");
+        }
         for (ViewGroup collectionView : postCollections) {
             ensureChildAttachListener(
                     activity,
@@ -151,12 +149,13 @@ public final class HookPost implements EnhanceHook {
 
     @Override
     public void clear(Activity activity) {
-        pendingContextMenuPostKey = null;
-        pendingContextMenuTimestampMs = 0L;
-    }
-
-    public static Integer resolvePostNumberForPostChild(ViewGroup collectionView, View postRoot) {
-        return resolvePostIdentity(collectionView, postRoot).postKey.postNumber;
+        Set<String> postWidgetTags = snapshotKnownWidgetTags(KNOWN_POST_WIDGET_TAGS);
+        if (postWidgetTags.isEmpty()) {
+            return;
+        }
+        for (View root : getWindowRootViews()) {
+            removeWidgetContainersRecursive(root, postWidgetTags, Collections.<String>emptySet());
+        }
     }
 
     private static void injectPendingContextMenuWidgets(Activity activity) {
@@ -171,6 +170,8 @@ public final class HookPost implements EnhanceHook {
 
         WidgetPayload payload = resolveWidgetPayload(postKey, CONTEXT_WIDGETS);
         if (payload == null) {
+            pendingContextMenuPostKey = null;
+            pendingContextMenuTimestampMs = 0L;
             return;
         }
 
@@ -180,9 +181,11 @@ public final class HookPost implements EnhanceHook {
         }
 
         ViewGroup contextMenuHost = ensureContextMenuHost(activity, dialogMenuRecyclerView);
-        contextMenuHost.setTag(
-                TAG_CONTEXT_MENU_CLOSE_ACTION,
-                createDialogCloseAction(dialogMenuRecyclerView));
+        contextMenuHost.setTag(TAG_CONTEXT_MENU_CLOSE_ACTION, (Runnable) () -> {
+            View rootView = dialogMenuRecyclerView.getRootView();
+            rootView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK));
+            rootView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK));
+        });
 
         Set<String> contextWidgetTags = snapshotKnownWidgetTags(KNOWN_CONTEXT_WIDGET_TAGS);
         applyWidgetPayload(activity, contextMenuHost, payload, null, contextWidgetTags);
@@ -229,7 +232,9 @@ public final class HookPost implements EnhanceHook {
         if (postRoot.getTag(TAG_LONG_CLICK_WRAPPER) != null) {
             return;
         }
-        View.OnLongClickListener delegate = readLongClickListener(postRoot);
+        Object listenerInfo = EnhanceReflection.readField(postRoot, "mListenerInfo");
+        View.OnLongClickListener delegate =
+                (View.OnLongClickListener) EnhanceReflection.readField(listenerInfo, "mOnLongClickListener");
         PostLongClickWrapper wrapper = new PostLongClickWrapper(activity, delegate);
         postRoot.setTag(TAG_LONG_CLICK_WRAPPER, wrapper);
         postRoot.setOnLongClickListener(wrapper);
@@ -240,7 +245,9 @@ public final class HookPost implements EnhanceHook {
         if (repliesButton == null || repliesButton.getTag(TAG_REPLIES_CLICK_WRAPPER) != null) {
             return;
         }
-        View.OnClickListener delegate = readClickListener(repliesButton);
+        Object listenerInfo = EnhanceReflection.readField(repliesButton, "mListenerInfo");
+        View.OnClickListener delegate =
+                (View.OnClickListener) EnhanceReflection.readField(listenerInfo, "mOnClickListener");
         PostClickWrapper wrapper = new PostClickWrapper(delegate);
         repliesButton.setTag(TAG_REPLIES_CLICK_WRAPPER, wrapper);
         repliesButton.setOnClickListener(wrapper);
@@ -388,24 +395,6 @@ public final class HookPost implements EnhanceHook {
         return false;
     }
 
-    private static View.OnLongClickListener readLongClickListener(View view) {
-        Object listenerInfo = EnhanceReflection.readField(view, "mListenerInfo");
-        return (View.OnLongClickListener) EnhanceReflection.readField(listenerInfo, "mOnLongClickListener");
-    }
-
-    private static View.OnClickListener readClickListener(View view) {
-        Object listenerInfo = EnhanceReflection.readField(view, "mListenerInfo");
-        return (View.OnClickListener) EnhanceReflection.readField(listenerInfo, "mOnClickListener");
-    }
-
-    private static Runnable createDialogCloseAction(View dialogMenuRecyclerView) {
-        return () -> {
-            View rootView = dialogMenuRecyclerView.getRootView();
-            rootView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_BACK));
-            rootView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_BACK));
-        };
-    }
-
     private static ViewGroup ensureContextMenuHost(Activity activity, View dialogMenuRecyclerView) {
         ViewGroup parent = (ViewGroup) dialogMenuRecyclerView.getParent();
         if (CONTEXT_MENU_WRAPPER_TAG.equals(parent.getTag())) {
@@ -510,13 +499,10 @@ public final class HookPost implements EnhanceHook {
             Method getInstanceMethod = windowManagerGlobalClass.getMethod("getInstance");
             Object windowManagerGlobal = getInstanceMethod.invoke(null);
             Object views = EnhanceReflection.readField(windowManagerGlobal, "mViews");
-            if (views instanceof List) {
-                return (List<View>) views;
+            if (!(views instanceof List)) {
+                throw new IllegalStateException("WindowManagerGlobal.mViews is not a List");
             }
-            if (views instanceof View[]) {
-                return Arrays.asList((View[]) views);
-            }
-            throw new IllegalStateException("Unexpected WindowManagerGlobal.mViews type");
+            return (List<View>) views;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -592,6 +578,17 @@ public final class HookPost implements EnhanceHook {
             if (container != null && container.getParent() == root) {
                 root.removeView(container);
             }
+        }
+    }
+
+    private static void removeWidgetContainersRecursive(View root, Set<String> knownTags, Set<String> activeTags) {
+        if (!(root instanceof ViewGroup)) {
+            return;
+        }
+        ViewGroup viewGroup = (ViewGroup) root;
+        removeWidgetContainers(viewGroup, knownTags, activeTags);
+        for (int i = viewGroup.getChildCount() - 1; i >= 0; i--) {
+            removeWidgetContainersRecursive(viewGroup.getChildAt(i), knownTags, activeTags);
         }
     }
 
