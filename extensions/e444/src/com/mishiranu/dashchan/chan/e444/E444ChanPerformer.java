@@ -228,8 +228,8 @@ public class E444ChanPerformer extends ChanPerformer {
         entity.add("hat", "");
         entity.add("timer", "0");
         entity.add("email", StringUtils.emptyIfNull(data.email));
-        entity.add("name", StringUtils.emptyIfNull(data.name));
-        entity.add("trip", "");
+        entity.add("name", "");
+        entity.add("trip", StringUtils.emptyIfNull(data.name));
         entity.add("subject", StringUtils.emptyIfNull(data.subject));
         entity.add("comment", StringUtils.emptyIfNull(data.comment));
         entity.add("poll_answers[]", "");

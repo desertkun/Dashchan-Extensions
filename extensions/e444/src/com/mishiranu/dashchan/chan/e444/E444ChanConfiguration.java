@@ -49,7 +49,7 @@ public class E444ChanConfiguration extends ChanConfiguration {
         EnhanceShim.ensureActivityHookInstalled(getContext());
         E444Model.Board cachedBoard = getCachedBoard(boardName);
         Posting posting = new Posting();
-        posting.allowName = cachedBoard.enableNames != 0;
+        posting.allowName = cachedBoard.enableTrips != 0;
         posting.allowTripcode = cachedBoard.enableTrips != 0;
         posting.allowEmail = true;
         posting.allowSubject = cachedBoard.enableSubject != 0;
