@@ -4,14 +4,12 @@ import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.util.TypedValue;
 import android.widget.TextView;
-import chan.content.model.Post;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceReflection;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidgetUtils;
 import com.mishiranu.dashchan.chan.e444.enhance.TaskCallback;
 import com.mishiranu.dashchan.chan.e444.enhance.tasks.TaskReadIcon;
-import com.mishiranu.dashchan.chan.e444.enhance.tasks.TaskReadPost;
 import com.mishiranu.dashchan.chan.e444.enhance.tasks.TaskSendReaction;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -64,10 +62,6 @@ public final class WidgetReaction {
         return iconName;
     }
 
-    public static String buildPostStateKey(String boardName, int postNumber) {
-        return boardName + ":" + postNumber;
-    }
-
     public void sendReaction(
             Activity activity,
             String boardName,
@@ -106,7 +100,7 @@ public final class WidgetReaction {
                             if (onSelectionChanged != null) {
                                 onSelectionChanged.run();
                             }
-                            refreshPostAfterReaction(activity, boardName, postNumber);
+                            EnhanceWidgetUtils.refreshPost(activity, locator, boardName, postNumber);
                             reactionView.setEnabled(true);
                         }
                     },
@@ -118,25 +112,6 @@ public final class WidgetReaction {
                         }
                     });
         });
-    }
-
-    private void refreshPostAfterReaction(Activity activity, String boardName, int postNumber) {
-        EnhanceReflection.submitTask(
-                locator,
-                new TaskReadPost(boardName, postNumber),
-                new TaskCallback<Post>() {
-                    @Override
-                    public void accept(Post post) {
-                        EnhanceReflection.syncCurrentActivitiesNow();
-                        activity.getWindow()
-                                .getDecorView()
-                                .postDelayed(EnhanceReflection::syncCurrentActivitiesNow, 120L);
-                    }
-                },
-                new TaskCallback<Throwable>() {
-                    @Override
-                    public void accept(Throwable throwable) {}
-                });
     }
 
     public void bindIcon(TextView reactionView, int iconSizeDp) {
@@ -206,14 +181,9 @@ public final class WidgetReaction {
         Drawable drawable = new BitmapDrawable(reactionView.getResources(), bitmap);
         Object iconSizeTag = reactionView.getTag(TAG_ICON_SIZE_DP);
         int iconSizeDp = iconSizeTag instanceof Integer ? (Integer) iconSizeTag : DEFAULT_ICON_SIZE_DP;
-        int iconSizePx = dp(reactionView, iconSizeDp);
+        int iconSizePx = EnhanceWidgetUtils.dp(reactionView, iconSizeDp);
         drawable.setBounds(0, 0, iconSizePx, iconSizePx);
-        reactionView.setCompoundDrawablePadding(dp(reactionView, 4));
+        reactionView.setCompoundDrawablePadding(EnhanceWidgetUtils.dp(reactionView, 4));
         reactionView.setCompoundDrawables(drawable, null, null, null);
-    }
-
-    private static int dp(TextView reactionView, int value) {
-        return Math.round(TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, value, reactionView.getResources().getDisplayMetrics()));
     }
 }

@@ -3,9 +3,6 @@ package com.mishiranu.dashchan.chan.e444.enhance.widgets;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
-import android.util.Log;
-import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -21,6 +18,7 @@ import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
 import com.mishiranu.dashchan.chan.e444.E444Model;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceReflection;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidgetUtils;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -83,7 +81,7 @@ public final class WidgetMenu implements EnhanceWidget {
 
     @Override
     public ViewGroup.LayoutParams createLayoutParams(Activity activity) {
-        int margin = dp(activity, 6);
+        int margin = EnhanceWidgetUtils.dp(activity, 6);
         LinearLayout.LayoutParams layoutParams =
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         layoutParams.leftMargin = margin;
@@ -95,13 +93,7 @@ public final class WidgetMenu implements EnhanceWidget {
 
     @Override
     public void inject(Activity activity, ViewGroup postRoot) {
-        View existingContainerView = postRoot.findViewWithTag(CONTAINER_TAG);
-        if (existingContainerView == null) {
-            LinearLayout container = createContainer(activity);
-            postRoot.addView(container);
-            existingContainerView = container;
-        }
-        LinearLayout container = (LinearLayout) existingContainerView;
+        LinearLayout container = EnhanceWidgetUtils.obtainOrCreateLinearContainer(activity, postRoot, CONTAINER_TAG);
         List<MenuSection> oldSections = BOUND_SECTIONS.get(container);
         if (oldSections != null && oldSections.equals(sections)) {
             return;
@@ -110,18 +102,8 @@ public final class WidgetMenu implements EnhanceWidget {
         BOUND_SECTIONS.put(container, sections);
     }
 
-    private static LinearLayout createContainer(Activity activity) {
-        LinearLayout container = new LinearLayout(activity);
-        container.setTag(CONTAINER_TAG);
-        container.setOrientation(LinearLayout.VERTICAL);
-        container.setGravity(Gravity.START);
-        container.setClickable(false);
-        container.setFocusable(false);
-        return container;
-    }
-
     private void applySections(Activity activity, LinearLayout container, List<MenuSection> sections) {
-        int titleTextColor = resolveAttrColor(activity, android.R.attr.textColorPrimary);
+        int titleTextColor = EnhanceWidgetUtils.resolveAttrColor(activity, android.R.attr.textColorPrimary, 0);
         for (int sectionIndex = 0; sectionIndex < sections.size(); sectionIndex++) {
             MenuSection section = sections.get(sectionIndex);
             int titleIndex = sectionIndex * 2;
@@ -152,54 +134,36 @@ public final class WidgetMenu implements EnhanceWidget {
     }
 
     private static TextView obtainOrCreateTitleView(Activity activity, LinearLayout container, int index) {
-        View existing = index < container.getChildCount() ? container.getChildAt(index) : null;
-        if (existing instanceof TextView) {
-            return (TextView) existing;
-        }
-        TextView titleView = new TextView(activity);
-        if (index < container.getChildCount()) {
-            container.removeViewAt(index);
-            container.addView(titleView, index, createTitleLayoutParams(activity));
-        } else {
-            container.addView(titleView, createTitleLayoutParams(activity));
-        }
-        return titleView;
+        return EnhanceWidgetUtils.obtainOrCreateChild(
+                container,
+                index,
+                TextView.class,
+                () -> new TextView(activity),
+                createTitleLayoutParams(activity));
     }
 
     private static FlexboxLayout obtainOrCreateLinksLayout(Activity activity, LinearLayout container, int index) {
-        View existing = index < container.getChildCount() ? container.getChildAt(index) : null;
-        if (existing instanceof FlexboxLayout) {
-            return (FlexboxLayout) existing;
-        }
-        FlexboxLayout linksLayout = createLinksLayout(activity);
-        if (index < container.getChildCount()) {
-            container.removeViewAt(index);
-            container.addView(linksLayout, index, createLinksLayoutParams(activity));
-        } else {
-            container.addView(linksLayout, createLinksLayoutParams(activity));
-        }
-        return linksLayout;
+        return EnhanceWidgetUtils.obtainOrCreateChild(
+                container,
+                index,
+                FlexboxLayout.class,
+                () -> createLinksLayout(activity),
+                createLinksLayoutParams(activity));
     }
 
     private static Button obtainOrCreateButton(Activity activity, FlexboxLayout linksLayout, int index) {
-        View existing = index < linksLayout.getChildCount() ? linksLayout.getChildAt(index) : null;
-        if (existing instanceof Button) {
-            return (Button) existing;
-        }
-        Button button = new Button(activity);
-        if (index < linksLayout.getChildCount()) {
-            linksLayout.removeViewAt(index);
-            linksLayout.addView(button, index, createButtonLayoutParams(activity));
-        } else {
-            linksLayout.addView(button, createButtonLayoutParams(activity));
-        }
-        return button;
+        return EnhanceWidgetUtils.obtainOrCreateChild(
+                linksLayout,
+                index,
+                Button.class,
+                () -> new Button(activity),
+                createButtonLayoutParams(activity));
     }
 
     private static LinearLayout.LayoutParams createTitleLayoutParams(Activity activity) {
         LinearLayout.LayoutParams titleLayoutParams =
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        titleLayoutParams.topMargin = dp(activity, 6);
+        titleLayoutParams.topMargin = EnhanceWidgetUtils.dp(activity, 6);
         return titleLayoutParams;
     }
 
@@ -215,15 +179,15 @@ public final class WidgetMenu implements EnhanceWidget {
     private static LinearLayout.LayoutParams createLinksLayoutParams(Activity activity) {
         LinearLayout.LayoutParams linksLayoutParams =
                 new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        linksLayoutParams.topMargin = dp(activity, 3);
+        linksLayoutParams.topMargin = EnhanceWidgetUtils.dp(activity, 3);
         return linksLayoutParams;
     }
 
     private static FlexboxLayout.LayoutParams createButtonLayoutParams(Activity activity) {
         FlexboxLayout.LayoutParams buttonLayoutParams = new FlexboxLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        buttonLayoutParams.rightMargin = dp(activity, 4);
-        buttonLayoutParams.bottomMargin = dp(activity, 4);
+        buttonLayoutParams.rightMargin = EnhanceWidgetUtils.dp(activity, 4);
+        buttonLayoutParams.bottomMargin = EnhanceWidgetUtils.dp(activity, 4);
         return buttonLayoutParams;
     }
 
@@ -269,17 +233,5 @@ public final class WidgetMenu implements EnhanceWidget {
         } catch (Throwable t) {
             return false;
         }
-    }
-
-    private static int dp(Activity activity, int value) {
-        return Math.round(TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, value, activity.getResources().getDisplayMetrics()));
-    }
-
-    private static int resolveAttrColor(Activity activity, int attr) {
-        android.content.res.TypedArray typedArray = activity.obtainStyledAttributes(new int[] {attr});
-        int color = typedArray.getColor(0, 0);
-        typedArray.recycle();
-        return color;
     }
 }
