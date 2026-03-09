@@ -1,16 +1,12 @@
 package com.mishiranu.dashchan.chan.e444.enhance.tasks;
 
 import chan.content.model.Post;
-import chan.http.HttpException;
 import chan.http.HttpRequest;
-import chan.http.HttpResponse;
 import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
 import com.mishiranu.dashchan.chan.e444.E444ChanPerformer;
-import com.mishiranu.dashchan.chan.e444.E444RequestPerformer;
-import com.mishiranu.dashchan.chan.e444.E444JsonUtils;
 import com.mishiranu.dashchan.chan.e444.E444Model;
+import com.mishiranu.dashchan.chan.e444.E444RequestPerformer;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceTask;
-import java.io.IOException;
 
 public final class TaskReadPost implements EnhanceTask<Post> {
     private final String boardName;

@@ -45,8 +45,7 @@ public final class EnhanceWidgetUtils {
     }
 
     public static int dp(Resources resources, int value) {
-        return Math.round(
-                TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.getDisplayMetrics()));
+        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.getDisplayMetrics()));
     }
 
     public static int applyAlpha(int color, float alpha) {
@@ -65,8 +64,7 @@ public final class EnhanceWidgetUtils {
         return resolveThemeColor(activity, hostAttrName, fallbackAttr, Color.WHITE);
     }
 
-    public static int resolveThemeColor(
-            Activity activity, String hostAttrName, int fallbackAttr, int fallbackColor) {
+    public static int resolveThemeColor(Activity activity, String hostAttrName, int fallbackAttr, int fallbackColor) {
         int fallback = resolveAttrColor(activity, fallbackAttr, fallbackColor);
         int hostAttr = activity.getResources().getIdentifier(hostAttrName, "attr", activity.getPackageName());
         if (hostAttr == 0) {
@@ -97,14 +95,9 @@ public final class EnhanceWidgetUtils {
         return colorStateList.getDefaultColor();
     }
 
-    public static LinearLayout obtainOrCreateLinearContainer(
-            Activity activity, ViewGroup root, String containerTag) {
+    public static LinearLayout obtainOrCreateLinearContainer(Activity activity, ViewGroup root, String containerTag) {
         return obtainOrCreateLinearContainer(
-                activity,
-                root,
-                containerTag,
-                DEFAULT_CONTAINER_ORIENTATION,
-                DEFAULT_CONTAINER_GRAVITY);
+                activity, root, containerTag, DEFAULT_CONTAINER_ORIENTATION, DEFAULT_CONTAINER_GRAVITY);
     }
 
     public static LinearLayout obtainOrCreateLinearContainer(

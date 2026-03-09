@@ -27,9 +27,8 @@ final class E444Web3HostResolver {
     private static final String UNS_PROXY = "0xF6c1b83977DE3dEffC476f5048A0a84d3375d498";
 
     private static final Uri[] BASE_RPC_URIS = {
-        Uri.parse("https://base.rpc.blxrbdn.com"),
-        Uri.parse("https://api.zan.top/base-mainnet"),
-        //Uri.parse("https://base.api.pocket.network")
+        Uri.parse("https://base.rpc.blxrbdn.com"), Uri.parse("https://api.zan.top/base-mainnet"),
+        // Uri.parse("https://base.api.pocket.network")
     };
 
     private static final long CACHE_MAX_AGE = 5L * 60L * 1000L;

@@ -7,10 +7,9 @@ import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import java.io.IOException;
 
 public final class E444JsonUtils {
-    private static final ObjectMapper OBJECT_MAPPER =
-            new ObjectMapper()
-                    .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
-                    .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper()
+            .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+            .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true);
 
     private E444JsonUtils() {}
 

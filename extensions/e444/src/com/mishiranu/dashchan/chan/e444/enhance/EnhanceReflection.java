@@ -107,7 +107,8 @@ public final class EnhanceReflection {
             return false;
         }
         Object threadNumberValue = readField(page, "threadNumber");
-        String threadNumber = threadNumberValue instanceof String ? (String) threadNumberValue
+        String threadNumber = threadNumberValue instanceof String
+                ? (String) threadNumberValue
                 : castString(invokeNoArgs(page, "getThreadNumber"));
         return threadNumber != null && !threadNumber.trim().isEmpty();
     }
@@ -196,8 +197,8 @@ public final class EnhanceReflection {
         int contentFragmentId =
                 activity.getResources().getIdentifier("content_fragment", "id", activity.getPackageName());
         if (contentFragmentId != 0) {
-            Object contentFragment = invoke(
-                    fragmentManager, METHOD_FIND_FRAGMENT_BY_ID, new Class<?>[] {int.class}, contentFragmentId);
+            Object contentFragment =
+                    invoke(fragmentManager, METHOD_FIND_FRAGMENT_BY_ID, new Class<?>[] {int.class}, contentFragmentId);
             if (contentFragment != null) {
                 return contentFragment;
             }

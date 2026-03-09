@@ -8,7 +8,6 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
-import com.mishiranu.dashchan.chan.e444.enhance.controllers.HookPost;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;

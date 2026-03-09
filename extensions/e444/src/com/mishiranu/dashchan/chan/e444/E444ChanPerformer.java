@@ -1,8 +1,6 @@
 package com.mishiranu.dashchan.chan.e444;
 
 import android.net.Uri;
-import android.util.Log;
-
 import chan.content.ApiException;
 import chan.content.ChanPerformer;
 import chan.content.InvalidResponseException;
@@ -19,19 +17,14 @@ import chan.http.UrlEncodedEntity;
 import chan.util.StringUtils;
 import com.mishiranu.dashchan.chan.e444.captcha.CaptchaReader;
 import com.mishiranu.dashchan.chan.e444.captcha.CaptchaSender;
-import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceShim;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
 import com.mishiranu.dashchan.chan.e444.enhance.controllers.HookPost;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetMenu;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetPoll;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReaction;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReactionsContextMenu;
 import com.mishiranu.dashchan.chan.e444.enhance.widgets.WidgetReactionsPost;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -89,11 +82,7 @@ public class E444ChanPerformer extends ChanPerformer {
             }
             if (postJson.answers != null) {
                 WidgetPoll widgetPoll = new WidgetPoll(
-                        locator,
-                        postJson.board,
-                        postJson.num,
-                        postJson.answers,
-                        postJson.poll_results_exact);
+                        locator, postJson.board, postJson.num, postJson.answers, postJson.poll_results_exact);
                 if (!widgetPoll.isEmpty()) {
                     widgetsForPost.add(widgetPoll);
                 }
@@ -111,7 +100,8 @@ public class E444ChanPerformer extends ChanPerformer {
                 }
             }
             if (!contextMenuReactionIcons.isEmpty()) {
-                widgetsForContextMenu.add(new WidgetReactionsContextMenu(locator, contextMenuReactionIcons, postJson.board, postJson.num));
+                widgetsForContextMenu.add(new WidgetReactionsContextMenu(
+                        locator, contextMenuReactionIcons, postJson.board, postJson.num));
             }
             HookPost.setContextMenuWidgetsForPost(widgetsForContextMenu);
         } finally {
@@ -124,9 +114,8 @@ public class E444ChanPerformer extends ChanPerformer {
     @Override
     public ReadBoardsResult onReadBoards(ReadBoardsData data) throws HttpException, InvalidResponseException {
         E444ChanConfiguration configuration = E444ChanConfiguration.get(this);
-        E444Model.BoardsResponse response = E444RequestPerformer
-                .request(data, "index.json")
-                .performJson(E444Model.BoardsResponse.class);
+        E444Model.BoardsResponse response =
+                E444RequestPerformer.request(data, "index.json").performJson(E444Model.BoardsResponse.class);
         HashMap<String, ArrayList<Board>> boardsMap = new HashMap<>();
         for (E444Model.Board board : response.boards) {
             configuration.updateFromBoards(board);
@@ -135,7 +124,8 @@ public class E444ChanPerformer extends ChanPerformer {
                 boards = new ArrayList<>();
                 boardsMap.put(board.category, boards);
             }
-            boards.add(new Board(board.id, board.name, StringUtils.clearHtml(board.info).trim()));
+            boards.add(new Board(
+                    board.id, board.name, StringUtils.clearHtml(board.info).trim()));
         }
         ArrayList<BoardCategory> boardCategories = new ArrayList<>();
         for (HashMap.Entry<String, ArrayList<Board>> entry : boardsMap.entrySet()) {
@@ -187,23 +177,19 @@ public class E444ChanPerformer extends ChanPerformer {
         return CaptchaReader.onReadCaptcha(
                 this,
                 data,
-                images -> requireUserImageSingleChoice(
-                        -1,
-                        images,
-                        "Select image where puzzle piece fits the gap",
-                        null
-                )
-        );
+                images ->
+                        requireUserImageSingleChoice(-1, images, "Select image where puzzle piece fits the gap", null));
     }
 
     @Override
-    public CheckAuthorizationResult onCheckAuthorization(CheckAuthorizationData data) throws HttpException,
-            InvalidResponseException {
+    public CheckAuthorizationResult onCheckAuthorization(CheckAuthorizationData data)
+            throws HttpException, InvalidResponseException {
         E444ChanConfiguration configuration = E444ChanConfiguration.get(this);
         UrlEncodedEntity entity = new UrlEncodedEntity();
         entity.add("passcode", data.authorizationData[0]);
         HttpResponse response = E444RequestPerformer.request(data, "user", "passlogin")
-                .configure(request -> request.setPostMethod(entity).setRedirectHandler(HttpRequest.RedirectHandler.NONE))
+                .configure(
+                        request -> request.setPostMethod(entity).setRedirectHandler(HttpRequest.RedirectHandler.NONE))
                 .perform();
         String passcodeAuth = response.getCookieValue("passcode_auth");
         String usercodeAuth = response.getCookieValue("usercode_auth");
@@ -216,7 +202,8 @@ public class E444ChanPerformer extends ChanPerformer {
     public ReadContentResult onReadContent(ReadContentData data) throws HttpException, InvalidResponseException {
         E444ChanLocator locator = E444ChanLocator.get(this);
         if (locator.isKnownHostOrRelative(data.uri)) {
-            E444RequestPerformer request = E444RequestPerformer.request(data, data.uri.getPathSegments().toArray(new String[0]));
+            E444RequestPerformer request = E444RequestPerformer.request(
+                    data, data.uri.getPathSegments().toArray(new String[0]));
             for (String queryName : data.uri.getQueryParameterNames()) {
                 for (String queryValue : data.uri.getQueryParameters(queryName)) {
                     request.param(queryName, queryValue);
@@ -258,8 +245,7 @@ public class E444ChanPerformer extends ChanPerformer {
         E444Model.PostingResponse response = E444RequestPerformer.request(data, "user", "posting")
                 .configure(request -> request.setPostMethod(entity)
                         .addCookie("passcode_auth", configuration.getCookie("passcode_auth"))
-                        .addCookie("usercode_auth", configuration.getCookie("usercode_auth"))
-                )
+                        .addCookie("usercode_auth", configuration.getCookie("usercode_auth")))
                 .performJson(E444Model.PostingResponse.class);
         if (response.num != null) {
             return new SendPostResult(data.threadNumber, response.num.toString());

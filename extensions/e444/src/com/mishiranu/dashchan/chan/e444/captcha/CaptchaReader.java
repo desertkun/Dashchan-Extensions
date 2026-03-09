@@ -6,8 +6,8 @@ import chan.content.InvalidResponseException;
 import chan.http.HttpException;
 import chan.http.UrlEncodedEntity;
 import com.mishiranu.dashchan.chan.e444.E444ChanConfiguration;
-import com.mishiranu.dashchan.chan.e444.E444Model;
 import com.mishiranu.dashchan.chan.e444.E444ChanPerformer;
+import com.mishiranu.dashchan.chan.e444.E444Model;
 import com.mishiranu.dashchan.chan.e444.E444RequestPerformer;
 
 public final class CaptchaReader {
@@ -20,12 +20,7 @@ public final class CaptchaReader {
 
     private CaptchaReader() {}
 
-    private static boolean checkSlideCaptcha(
-            ChanPerformer.ReadCaptchaData data,
-            String key,
-            String value,
-            int x,
-            int y)
+    private static boolean checkSlideCaptcha(ChanPerformer.ReadCaptchaData data, String key, String value, int x, int y)
             throws HttpException, InvalidResponseException {
         UrlEncodedEntity entity = new UrlEncodedEntity();
         entity.add("point", x + "," + y);
@@ -51,7 +46,8 @@ public final class CaptchaReader {
             if (data.mayShowLoadButton) {
                 return new ChanPerformer.ReadCaptchaResult(ChanPerformer.CaptchaState.NEED_LOAD, null);
             }
-            E444Model.SlideCaptchaIdResponse response = E444RequestPerformer.request(data, "api", "captcha", "slide", "id")
+            E444Model.SlideCaptchaIdResponse response = E444RequestPerformer.request(
+                            data, "api", "captcha", "slide", "id")
                     .param("v", Long.toString(System.currentTimeMillis()))
                     .performJson(E444Model.SlideCaptchaIdResponse.class);
             Bitmap image;
@@ -66,7 +62,8 @@ public final class CaptchaReader {
             tileY = Math.max(0, Math.min(tileY, Math.max(0, image.getHeight() - tile.getHeight())));
             Integer selectedX;
             try {
-                selectedX = SlideCaptchaUtils.chooseSlideCaptchaX(image, tile, tileY, SLIDE_CHOICES_COUNT, slideCaptchaChooser::choose);
+                selectedX = SlideCaptchaUtils.chooseSlideCaptchaX(
+                        image, tile, tileY, SLIDE_CHOICES_COUNT, slideCaptchaChooser::choose);
             } finally {
                 image.recycle();
                 tile.recycle();
@@ -74,7 +71,8 @@ public final class CaptchaReader {
             if (selectedX == null) {
                 return new ChanPerformer.ReadCaptchaResult(ChanPerformer.CaptchaState.NEED_LOAD, null);
             }
-            if (!checkSlideCaptcha(data, response.captchaKey, Long.toString(System.currentTimeMillis()), selectedX, tileY)) {
+            if (!checkSlideCaptcha(
+                    data, response.captchaKey, Long.toString(System.currentTimeMillis()), selectedX, tileY)) {
                 return new ChanPerformer.ReadCaptchaResult(ChanPerformer.CaptchaState.NEED_LOAD, null);
             }
             ChanPerformer.CaptchaData captchaData = new ChanPerformer.CaptchaData();

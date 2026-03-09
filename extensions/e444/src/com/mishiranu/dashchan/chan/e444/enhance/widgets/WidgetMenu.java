@@ -135,11 +135,7 @@ public final class WidgetMenu implements EnhanceWidget {
 
     private static TextView obtainOrCreateTitleView(Activity activity, LinearLayout container, int index) {
         return EnhanceWidgetUtils.obtainOrCreateChild(
-                container,
-                index,
-                TextView.class,
-                () -> new TextView(activity),
-                createTitleLayoutParams(activity));
+                container, index, TextView.class, () -> new TextView(activity), createTitleLayoutParams(activity));
     }
 
     private static FlexboxLayout obtainOrCreateLinksLayout(Activity activity, LinearLayout container, int index) {
@@ -153,11 +149,7 @@ public final class WidgetMenu implements EnhanceWidget {
 
     private static Button obtainOrCreateButton(Activity activity, FlexboxLayout linksLayout, int index) {
         return EnhanceWidgetUtils.obtainOrCreateChild(
-                linksLayout,
-                index,
-                Button.class,
-                () -> new Button(activity),
-                createButtonLayoutParams(activity));
+                linksLayout, index, Button.class, () -> new Button(activity), createButtonLayoutParams(activity));
     }
 
     private static LinearLayout.LayoutParams createTitleLayoutParams(Activity activity) {

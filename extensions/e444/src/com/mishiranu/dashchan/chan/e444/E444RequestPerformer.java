@@ -1,15 +1,12 @@
 package com.mishiranu.dashchan.chan.e444;
 
 import android.net.Uri;
-import android.util.Log;
-
 import chan.content.InvalidResponseException;
 import chan.http.HttpException;
 import chan.http.HttpRequest;
 import chan.http.HttpResponse;
 import java.io.IOException;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 
 public final class E444RequestPerformer {
@@ -73,7 +70,7 @@ public final class E444RequestPerformer {
     }
 
     public <T> T performJson(Class<T> valueClass) throws HttpException, InvalidResponseException {
-        try{
+        try {
             return E444JsonUtils.fromJson(perform().readString(), valueClass);
         } catch (IOException e) {
             throw new InvalidResponseException(e);

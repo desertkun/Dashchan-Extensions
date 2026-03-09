@@ -81,7 +81,8 @@ public final class WidgetPoll implements EnhanceWidget {
         ArrayList<PollItem> parsedPollItems = new ArrayList<>();
         int parsedTotalVotes = 0;
         for (int i = 0; i < answers.size(); i++) {
-            String answer = StringUtils.clearHtml(StringUtils.emptyIfNull(answers.get(i))).trim();
+            String answer = StringUtils.clearHtml(StringUtils.emptyIfNull(answers.get(i)))
+                    .trim();
             int votes = pollResultsExact.get(i);
             parsedTotalVotes += votes;
             parsedPollItems.add(new PollItem(answer, votes));
@@ -163,8 +164,7 @@ public final class WidgetPoll implements EnhanceWidget {
         fillView.setBackground(fillShape);
         fillView.setPivotX(0f);
         FrameLayout.LayoutParams fillLayoutParams =
-                new FrameLayout.LayoutParams(
-                        0, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
+                new FrameLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
         pollBar.addView(fillView, fillLayoutParams);
 
         LinearLayout contentLayout = new LinearLayout(activity);
@@ -192,8 +192,10 @@ public final class WidgetPoll implements EnhanceWidget {
         resultView.setSingleLine(true);
         resultView.setGravity(Gravity.END);
         resultView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-        contentLayout.addView(resultView, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        contentLayout.addView(
+                resultView,
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         pollBar.setTag(TAG_ANSWER_VIEW, answerView);
         pollBar.setTag(TAG_RESULT_VIEW, resultView);
@@ -208,12 +210,7 @@ public final class WidgetPoll implements EnhanceWidget {
         return layoutParams;
     }
 
-    private void bindPollBar(
-            Activity activity,
-            FrameLayout pollBar,
-            PollItem pollItem,
-            int totalVotes,
-            int voteIndex) {
+    private void bindPollBar(Activity activity, FrameLayout pollBar, PollItem pollItem, int totalVotes, int voteIndex) {
         TextView answerView = (TextView) pollBar.getTag(TAG_ANSWER_VIEW);
         TextView resultView = (TextView) pollBar.getTag(TAG_RESULT_VIEW);
         int percentage = totalVotes > 0 ? Math.round(pollItem.votes * 100f / totalVotes) : 0;
@@ -254,7 +251,10 @@ public final class WidgetPoll implements EnhanceWidget {
             return;
         }
 
-        if (sameRow && runningAnimator instanceof ValueAnimator && runningTarget != null && runningTarget == targetLevel) {
+        if (sameRow
+                && runningAnimator instanceof ValueAnimator
+                && runningTarget != null
+                && runningTarget == targetLevel) {
             return;
         }
 

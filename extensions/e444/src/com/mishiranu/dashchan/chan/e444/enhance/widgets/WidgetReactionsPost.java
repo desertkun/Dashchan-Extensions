@@ -14,15 +14,15 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import chan.util.StringUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
-import com.mishiranu.dashchan.chan.e444.E444Model;
-import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidgetUtils;
-import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
 import com.google.android.flexbox.AlignItems;
 import com.google.android.flexbox.FlexDirection;
 import com.google.android.flexbox.FlexWrap;
 import com.google.android.flexbox.FlexboxLayout;
 import com.google.android.flexbox.JustifyContent;
+import com.mishiranu.dashchan.chan.e444.E444ChanLocator;
+import com.mishiranu.dashchan.chan.e444.E444Model;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidget;
+import com.mishiranu.dashchan.chan.e444.enhance.EnhanceWidgetUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +43,8 @@ public final class WidgetReactionsPost implements EnhanceWidget {
     private final String postStateKey;
     private final List<ReactionItem> reactions = new ArrayList<>();
 
-    public WidgetReactionsPost(List<E444Model.Reaction> reactionsJson, E444ChanLocator locator, String boardName, int postNumber) {
+    public WidgetReactionsPost(
+            List<E444Model.Reaction> reactionsJson, E444ChanLocator locator, String boardName, int postNumber) {
         this.boardName = boardName;
         this.postNumber = postNumber;
         this.postStateKey = EnhanceWidgetUtils.buildPostStateKey(boardName, postNumber);
@@ -118,11 +119,7 @@ public final class WidgetReactionsPost implements EnhanceWidget {
 
     private static TextView obtainOrCreateBubble(Activity activity, FlexboxLayout flexbox, int index) {
         return EnhanceWidgetUtils.obtainOrCreateChild(
-                flexbox,
-                index,
-                TextView.class,
-                () -> createBubble(activity),
-                createBubbleLayoutParams(activity));
+                flexbox, index, TextView.class, () -> createBubble(activity), createBubbleLayoutParams(activity));
     }
 
     private static FlexboxLayout.LayoutParams createBubbleLayoutParams(Activity activity) {
@@ -134,10 +131,7 @@ public final class WidgetReactionsPost implements EnhanceWidget {
     }
 
     private void bindReactionBubble(
-            Activity activity,
-            TextView bubble,
-            ReactionItem reactionItem,
-            Runnable refreshSelectionState) {
+            Activity activity, TextView bubble, ReactionItem reactionItem, Runnable refreshSelectionState) {
         bubble.setTag(TAG_REACTION_ITEM, reactionItem);
         bubble.setGravity(Gravity.CENTER_VERTICAL);
         bubble.setMinHeight(EnhanceWidgetUtils.dp(activity, 24));
@@ -181,8 +175,8 @@ public final class WidgetReactionsPost implements EnhanceWidget {
 
     private void applyReactionBubbleState(Activity activity, TextView bubble, ReactionItem reactionItem) {
         bubble.setText(Integer.toString(reactionItem.count));
-        boolean selected = isSelected(
-                activity.getApplicationContext(), postStateKey, reactionItem.reaction.getIconName());
+        boolean selected =
+                isSelected(activity.getApplicationContext(), postStateKey, reactionItem.reaction.getIconName());
         bubble.setSelected(selected);
         bubble.setBackground(createBubbleBackground(activity, selected));
     }
@@ -202,10 +196,7 @@ public final class WidgetReactionsPost implements EnhanceWidget {
     }
 
     static void updateSelection(
-            Context context,
-            String postStateKey,
-            String iconName,
-            WidgetReaction.SelectionMode mode) {
+            Context context, String postStateKey, String iconName, WidgetReaction.SelectionMode mode) {
         String activeIcon = TOGGLED_REACTION_BY_POST.get(context, postStateKey);
         if (mode == WidgetReaction.SelectionMode.SET) {
             TOGGLED_REACTION_BY_POST.put(context, postStateKey, iconName);
@@ -226,8 +217,7 @@ public final class WidgetReactionsPost implements EnhanceWidget {
         shape.setCornerRadius(EnhanceWidgetUtils.dp(activity, 12));
         shape.setColor(active ? EnhanceWidgetUtils.applyAlpha(accentColor, 0.22f) : backgroundColor);
         shape.setStroke(
-                EnhanceWidgetUtils.dp(activity, 1),
-                EnhanceWidgetUtils.applyAlpha(accentColor, active ? 0.65f : 0.35f));
+                EnhanceWidgetUtils.dp(activity, 1), EnhanceWidgetUtils.applyAlpha(accentColor, active ? 0.65f : 0.35f));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             return new RippleDrawable(
                     ColorStateList.valueOf(EnhanceWidgetUtils.applyAlpha(accentColor, 0.18f)), shape, null);

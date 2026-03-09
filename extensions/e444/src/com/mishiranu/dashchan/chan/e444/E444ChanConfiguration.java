@@ -14,8 +14,8 @@ public class E444ChanConfiguration extends ChanConfiguration {
         EnhanceShim.ensureActivityHookInstalled(getContext());
         request(OPTION_ALLOW_CAPTCHA_PASS);
         addCaptchaType(CAPTCHA_TYPE_SLIDER);
-//        addCaptchaType(CAPTCHA_TYPE_RECAPTCHA_2);
-//        addCaptchaType(CAPTCHA_TYPE_RECAPTCHA_2_INVISIBLE);
+        //        addCaptchaType(CAPTCHA_TYPE_RECAPTCHA_2);
+        //        addCaptchaType(CAPTCHA_TYPE_RECAPTCHA_2_INVISIBLE);
     }
 
     @Override
@@ -24,7 +24,7 @@ public class E444ChanConfiguration extends ChanConfiguration {
         E444Model.Board cachedBoard = getCachedBoard(boardName);
         Board board = new Board();
         board.allowPosting = cachedBoard.enablePosting != 0;
-        //board.allowVotes = cachedBoard.enableLikes != 0;
+        // board.allowVotes = cachedBoard.enableLikes != 0;
         board.allowCatalog = true;
         board.allowDeleting = true;
         board.allowReporting = true;

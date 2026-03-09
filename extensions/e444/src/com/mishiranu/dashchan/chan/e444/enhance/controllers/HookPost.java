@@ -6,8 +6,8 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.View;
-import android.view.ViewParent;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.LinearLayout;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceHook;
 import com.mishiranu.dashchan.chan.e444.enhance.EnhanceReflection;
@@ -121,12 +121,7 @@ public final class HookPost implements EnhanceHook {
         }
         for (ViewGroup collectionView : postCollections) {
             ensureChildAttachListener(
-                    activity,
-                    collectionView,
-                    bottomBarId,
-                    repliesButtonId,
-                    commentId,
-                    textBarPaddingId);
+                    activity, collectionView, bottomBarId, repliesButtonId, commentId, textBarPaddingId);
             for (int i = 0; i < collectionView.getChildCount(); i++) {
                 View child = collectionView.getChildAt(i);
                 if (!(child instanceof ViewGroup)) {
@@ -264,8 +259,7 @@ public final class HookPost implements EnhanceHook {
             throw new IllegalStateException("Comment link listener is not initialized");
         }
         try {
-            Class<?> linkListenerClass =
-                    Class.forName("com.mishiranu.dashchan.widget.CommentTextView$LinkListener");
+            Class<?> linkListenerClass = Class.forName("com.mishiranu.dashchan.widget.CommentTextView$LinkListener");
             Class<?> linkConfigurationClass =
                     Class.forName("com.mishiranu.dashchan.widget.CommentTextView$LinkConfiguration");
             InvocationHandler handler = (proxy, method, args) -> {
@@ -324,13 +318,10 @@ public final class HookPost implements EnhanceHook {
                 }
                 return null;
             };
-            Object listener = Proxy.newProxyInstance(
-                    listenerClass.getClassLoader(), new Class<?>[] {listenerClass}, handler);
+            Object listener =
+                    Proxy.newProxyInstance(listenerClass.getClassLoader(), new Class<?>[] {listenerClass}, handler);
             EnhanceReflection.invoke(
-                    collectionView,
-                    "addOnChildAttachStateChangeListener",
-                    new Class<?>[] {listenerClass},
-                    listener);
+                    collectionView, "addOnChildAttachStateChangeListener", new Class<?>[] {listenerClass}, listener);
             synchronized (CHILD_ATTACH_LISTENERS) {
                 CHILD_ATTACH_LISTENERS.put(collectionView, listener);
             }
@@ -340,9 +331,7 @@ public final class HookPost implements EnhanceHook {
     }
 
     private static Set<ViewGroup> collectPostCollections(
-            ViewGroup primaryCollectionView,
-            int bottomBarId,
-            int textBarPaddingId) {
+            ViewGroup primaryCollectionView, int bottomBarId, int textBarPaddingId) {
         LinkedHashSet<ViewGroup> collections = new LinkedHashSet<>();
         if (primaryCollectionView != null) {
             collections.add(primaryCollectionView);
@@ -355,10 +344,7 @@ public final class HookPost implements EnhanceHook {
     }
 
     private static void collectPostCollectionsFromView(
-            View view,
-            Set<ViewGroup> collections,
-            int bottomBarId,
-            int textBarPaddingId) {
+            View view, Set<ViewGroup> collections, int bottomBarId, int textBarPaddingId) {
         if (!(view instanceof ViewGroup)) {
             return;
         }
@@ -381,8 +367,8 @@ public final class HookPost implements EnhanceHook {
             if (child.findViewById(bottomBarId) == null || child.findViewById(textBarPaddingId) == null) {
                 continue;
             }
-            Object holder = EnhanceReflection.invoke(
-                    candidate, "getChildViewHolder", new Class<?>[] {View.class}, child);
+            Object holder =
+                    EnhanceReflection.invoke(candidate, "getChildViewHolder", new Class<?>[] {View.class}, child);
             if (holder == null) {
                 continue;
             }
@@ -433,9 +419,7 @@ public final class HookPost implements EnhanceHook {
     }
 
     private static void enforceContextMenuHostOrder(
-            ViewGroup wrapper,
-            View dialogMenuRecyclerView,
-            ViewGroup contextMenuHost) {
+            ViewGroup wrapper, View dialogMenuRecyclerView, ViewGroup contextMenuHost) {
         if (dialogMenuRecyclerView.getParent() != wrapper) {
             throw new IllegalStateException("Context menu recycler is detached from wrapper");
         }
@@ -477,7 +461,8 @@ public final class HookPost implements EnhanceHook {
 
     private static View findDialogMenuRecyclerView(View view) {
         Object adapter = EnhanceReflection.invokeNoArgs(view, "getAdapter");
-        if (adapter != null && DIALOG_MENU_ADAPTER_CLASS.equals(adapter.getClass().getName())) {
+        if (adapter != null
+                && DIALOG_MENU_ADAPTER_CLASS.equals(adapter.getClass().getName())) {
             return view;
         }
         if (view instanceof ViewGroup) {
@@ -523,9 +508,7 @@ public final class HookPost implements EnhanceHook {
         Object postNumberObject = EnhanceReflection.invokeNoArgs(postItem, "getPostNumber");
         int postNumber = (Integer) EnhanceReflection.readField(postNumberObject, "major");
 
-        return new PostIdentity(
-                new PostKey(chanName, boardName, postNumber),
-                (ViewGroup) postRootView);
+        return new PostIdentity(new PostKey(chanName, boardName, postNumber), (ViewGroup) postRootView);
     }
 
     private static View resolveDirectChild(ViewGroup parent, View child) {
@@ -549,11 +532,7 @@ public final class HookPost implements EnhanceHook {
     }
 
     private static void applyWidgetPayload(
-            Activity activity,
-            ViewGroup root,
-            WidgetPayload payload,
-            View anchorView,
-            Set<String> knownWidgetTags) {
+            Activity activity, ViewGroup root, WidgetPayload payload, View anchorView, Set<String> knownWidgetTags) {
         List<EnhanceWidget> widgets = payload != null ? payload.widgets : new ArrayList<>();
 
         HashSet<String> activeTags = new HashSet<>();
@@ -626,9 +605,7 @@ public final class HookPost implements EnhanceHook {
         if (anchorView == null) {
             return root.getChildCount();
         }
-        View anchorDirectChild = anchorView.getParent() == root
-                ? anchorView
-                : resolveDirectChild(root, anchorView);
+        View anchorDirectChild = anchorView.getParent() == root ? anchorView : resolveDirectChild(root, anchorView);
         int index = root.indexOfChild(anchorDirectChild);
         if (index < 0) {
             throw new IllegalStateException("Anchor view is not attached under target root");
@@ -651,12 +628,14 @@ public final class HookPost implements EnhanceHook {
     }
 
     private static void scheduleContextMenuInjection(Activity activity) {
-        MAIN_HANDLER.postDelayed(() -> {
-            if (activity.isFinishing() || EnhanceReflection.isActivityDestroyed(activity)) {
-                return;
-            }
-            injectPendingContextMenuWidgets(activity);
-        }, CONTEXT_MENU_SCAN_DELAY_MS);
+        MAIN_HANDLER.postDelayed(
+                () -> {
+                    if (activity.isFinishing() || EnhanceReflection.isActivityDestroyed(activity)) {
+                        return;
+                    }
+                    injectPendingContextMenuWidgets(activity);
+                },
+                CONTEXT_MENU_SCAN_DELAY_MS);
     }
 
     private static void scheduleApplySync() {
@@ -678,9 +657,7 @@ public final class HookPost implements EnhanceHook {
         private final Activity activity;
         private final View.OnLongClickListener delegate;
 
-        private PostLongClickWrapper(
-                Activity activity,
-                View.OnLongClickListener delegate) {
+        private PostLongClickWrapper(Activity activity, View.OnLongClickListener delegate) {
             this.activity = activity;
             this.delegate = Objects.requireNonNull(delegate, "delegate");
         }

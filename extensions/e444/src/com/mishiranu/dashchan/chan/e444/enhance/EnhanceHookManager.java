@@ -24,8 +24,7 @@ final class EnhanceHookManager {
         Object lastPageToken;
 
         ActivityStateObserver(
-                WeakReference<Activity> activityReference,
-                ViewTreeObserver.OnPreDrawListener preDrawListener) {
+                WeakReference<Activity> activityReference, ViewTreeObserver.OnPreDrawListener preDrawListener) {
             this.activityReference = activityReference;
             this.preDrawListener = preDrawListener;
         }

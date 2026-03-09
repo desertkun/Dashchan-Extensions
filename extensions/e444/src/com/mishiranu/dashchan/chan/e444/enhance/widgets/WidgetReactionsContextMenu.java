@@ -31,7 +31,8 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
     private final String postStateKey;
     private final List<WidgetReaction> reactions;
 
-    public WidgetReactionsContextMenu(E444ChanLocator locator, List<String> iconNames, String boardName, int postNumber) {
+    public WidgetReactionsContextMenu(
+            E444ChanLocator locator, List<String> iconNames, String boardName, int postNumber) {
         this.boardName = boardName;
         this.postNumber = postNumber;
         this.postStateKey = EnhanceWidgetUtils.buildPostStateKey(boardName, postNumber);
@@ -65,10 +66,12 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
         ScrollView scrollView = createScrollView(activity);
         container.addView(
                 scrollView,
-                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         FlexboxLayout flexbox = createFlexbox(activity);
-        scrollView.addView(flexbox, new ScrollView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        scrollView.addView(
+                flexbox,
+                new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         Runnable refreshSelectionState = () -> applyReactionSelectionState(activity, flexbox);
         for (WidgetReaction reaction : reactions) {
             TextView reactionView = createReactionView(activity);
@@ -81,11 +84,7 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
 
     private static LinearLayout obtainOrCreateContainer(Activity activity, ViewGroup postRoot) {
         return EnhanceWidgetUtils.obtainOrCreateLinearContainer(
-                activity,
-                postRoot,
-                CONTAINER_TAG,
-                LinearLayout.VERTICAL,
-                Gravity.CENTER_HORIZONTAL);
+                activity, postRoot, CONTAINER_TAG, LinearLayout.VERTICAL, Gravity.CENTER_HORIZONTAL);
     }
 
     private static FlexboxLayout createFlexbox(Activity activity) {
@@ -112,9 +111,8 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
     }
 
     private static FlexboxLayout.LayoutParams createReactionLayoutParams(Activity activity) {
-        FlexboxLayout.LayoutParams layoutParams =
-                new FlexboxLayout.LayoutParams(
-                        EnhanceWidgetUtils.dp(activity, CELL_WIDTH_DP), ViewGroup.LayoutParams.WRAP_CONTENT);
+        FlexboxLayout.LayoutParams layoutParams = new FlexboxLayout.LayoutParams(
+                EnhanceWidgetUtils.dp(activity, CELL_WIDTH_DP), ViewGroup.LayoutParams.WRAP_CONTENT);
         layoutParams.setFlexGrow(0f);
         layoutParams.setFlexShrink(0f);
         layoutParams.leftMargin = EnhanceWidgetUtils.dp(activity, 2);
@@ -171,8 +169,8 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
     }
 
     private void applyReactionViewState(Activity activity, TextView reactionView, WidgetReaction reaction) {
-        reactionView.setSelected(WidgetReactionsPost.isSelected(
-                activity.getApplicationContext(), postStateKey, reaction.getIconName()));
+        reactionView.setSelected(
+                WidgetReactionsPost.isSelected(activity.getApplicationContext(), postStateKey, reaction.getIconName()));
     }
 
     private static void applyMaxScrollHeight(Activity activity, ScrollView scrollView, FlexboxLayout flexbox) {
@@ -186,8 +184,7 @@ public final class WidgetReactionsContextMenu implements EnhanceWidget {
                 scrollView.getWindowVisibleDisplayFrame(visibleFrame);
                 int[] location = new int[2];
                 scrollView.getLocationOnScreen(location);
-                int availableVisibleHeight =
-                        visibleFrame.bottom - location[1] - EnhanceWidgetUtils.dp(activity, 20);
+                int availableVisibleHeight = visibleFrame.bottom - location[1] - EnhanceWidgetUtils.dp(activity, 20);
                 int maxHeight = availableVisibleHeight > 0
                         ? Math.max(
                                 EnhanceWidgetUtils.dp(activity, 72),

@@ -68,7 +68,8 @@ public final class WidgetReaction {
             int postNumber,
             TaskCallback<Void> onSuccess,
             TaskCallback<Throwable> onError) {
-        EnhanceReflection.submitTask(locator, new TaskSendReaction(boardName, postNumber, iconName), onSuccess, onError);
+        EnhanceReflection.submitTask(
+                locator, new TaskSendReaction(boardName, postNumber, iconName), onSuccess, onError);
     }
 
     public void bindClick(
@@ -93,10 +94,7 @@ public final class WidgetReaction {
                         @Override
                         public void accept(Void result) {
                             WidgetReactionsPost.updateSelection(
-                                    activity.getApplicationContext(),
-                                    postStateKey,
-                                    iconName,
-                                    selectionMode);
+                                    activity.getApplicationContext(), postStateKey, iconName, selectionMode);
                             if (onSelectionChanged != null) {
                                 onSelectionChanged.run();
                             }
