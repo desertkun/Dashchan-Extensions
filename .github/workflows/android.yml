@@ -51,6 +51,8 @@ jobs:
             name: ArchiveOfSins
           - module: palanqwin
             name: PalanqWin
+          - module: ech
+            name: E444
 
     steps:
     - uses: actions/checkout@v3
