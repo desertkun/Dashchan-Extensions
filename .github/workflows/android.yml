@@ -51,7 +51,7 @@ jobs:
             name: ArchiveOfSins
           - module: palanqwin
             name: PalanqWin
-          - module: ech
+          - module: e444
             name: E444
 
     steps:
